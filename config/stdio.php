@@ -1,22 +1,26 @@
 <?php
 
+use SuperconductorMCP\STDIO\Actions\CancelledAction;
+use SuperconductorMCP\STDIO\Actions\InitializedAction;
+
 return [
-    'stream_management' => [
-        'default' => 'native',
-        'managers' => [
-            'native' => [
-                'driver' => 'native',
-                'settings' => [
-                    'read_byte_size' => 4096,
-                ]
-            ],
-            'react' => [
-                'driver' => 'react',
-                'settings' => [
-                    'loop_time' => 0.5, // seconds
-                    'loop_interface' => \React\EventLoop\Loop::class,
-                ]
-            ],
-        ]
+    'handshake' => [
+        'stop_waiting' => [
+            'enabled' => true,
+            'ttl' => 60,
+        ],
+    ],
+    'ping_time' => [
+        'enabled' => true,
+        'ttl' => 10,
+        'max_misses' => 3,
+    ],
+    'client' => [
+        // seconds to wait for a server to exit after its stdin closes, and again after SIGTERM, before escalating
+        'shutdown_grace' => 2,
+    ],
+    'notifications' => [
+        'notifications/initialized' => InitializedAction::class,
+        'notifications/cancelled' => CancelledAction::class
     ]
 ];

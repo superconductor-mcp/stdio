@@ -1,56 +1,57 @@
 {
-    "name": "superconductor/stdio-transport",
-    "description": "Stdio transport protocol for the Superconductor MCP framework.",
+    "name": "semiconductor/stdio",
+    "description": "The stdio transport for Superconductor MCP.",
     "type": "library",
-    "version": "20241105.5.0",
+    "version": "0.10.0",
+    "keywords": [
+        "superconductor",
+        "semiconductor",
+        "mcp",
+        "stdio",
+        "transport"
+    ],
     "license": "MIT",
     "authors": [
         {
-            "name": "Project Saturn Studios, LLC",
-            "email": "info@projectsaturnstudios.com"
+            "name": "Angel Gonzalez",
+            "email": "angel@projectsaturnstudios.com"
         }
     ],
     "require": {
-        "php": "^8.2",
-        "react/stream": "^1.4",
-        "react/event-loop": "^1.5",
-        "lorisleiva/laravel-actions": "^2.6",
-        "superconductor/mcp": "^20241105.5.0",
-        "projectsaturnstudios/quickuuid": "^0.2.0",
-        "projectsaturnstudios/laravel-design-patterns": "^0.1.0"
+        "php": "^8.4|^8.5|^8.6",
+        "superconductor/mcp": "^0.10.0",
+        "venusian-voyager/io-pools": "^0.10.0",
+        "venusian-voyager/sketches": "^0.10.0"
+    },
+    "require-dev": {
+        "pestphp/pest": "^4.0"
     },
     "autoload": {
         "psr-4": {
-            "Superconductor\\Transports\\Stdio\\": "src/"
+            "SuperconductorMCP\\STDIO\\": "src/"
         }
-    },
-    "minimum-stability": "stable",
-    "extra": {
-        "laravel": {
-            "providers": [
-                "Superconductor\\Transports\\Stdio\\Providers\\StdioTransportServiceProvider"
-            ],
-            "aliases": {
-
-            }
-        }
-    },
-    "require-dev": {
-        "pestphp/pest": "^3.8",
-        "react/event-loop": "^1.5",
-        "react/stream": "^1.4",
-        "illuminate/container": "^12.0",
-        "illuminate/support": "^12.24",
-        "illuminate/events": "^12.24"
     },
     "autoload-dev": {
         "psr-4": {
-            "Tests\\": "tests/"
+            "SuperconductorMCP\\STDIO\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest"
+    },
+    "extra": {
+        "venusian": {
+            "providers": [
+                "SuperconductorMCP\\STDIO\\Providers\\STDIOServiceProvider"
+            ]
         }
     },
     "config": {
+        "sort-packages": true,
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
-    }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }
