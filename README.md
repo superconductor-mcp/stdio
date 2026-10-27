@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/superconductor-mcp/stdio/tests.yml?style=flat-square&label=CI)](https://github.com/superconductor-mcp/stdio/actions/workflows/tests.yml)
 [![Packagist](https://img.shields.io/packagist/v/semiconductor/stdio?style=flat-square)](https://packagist.org/packages/semiconductor/stdio)
 [![PHP](https://img.shields.io/packagist/dependency-v/semiconductor/stdio/php?style=flat-square&label=PHP)](https://packagist.org/packages/semiconductor/stdio)
-[![MCP](https://img.shields.io/badge/MCP-2025--03--26-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
+[![MCP](https://img.shields.io/badge/MCP-2025--06--18-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
 [![License](https://img.shields.io/github/license/superconductor-mcp/stdio?style=flat-square)](LICENSE)
 [![OKF](https://img.shields.io/badge/OKF-0.2-6f42c1?style=flat-square&label=knowledge%20bundle)](.okf/index.md)
 
@@ -104,7 +104,7 @@ The server's response latency is one sketch frame, set by `SKETCH_REFRESH_RATE` 
 | Handshake | `initialize`, `ping`, `logging/setLevel` | `notifications/initialized`, or `stop_waiting` running out |
 | Available | everything but `initialize` | the pipe closing, or `max_misses` unanswered pings |
 
-A line may be a JSON-RPC batch; each message in it is handled in order and each request answered on its own line. A request the state refuses gets `InvalidRequest` "Method [x] is not allowed." with its id. The sketch stops when the pipe closes, the handshake times out, or the client stops answering pings. PHP warnings go to stderr so stdout carries frames only.
+A line may be a JSON-RPC batch when the session negotiated 2025-03-26 or earlier; each message in it is handled in order and each request answered on its own line. A 2025-06-18 session's batch is refused whole with one `InvalidRequest`. A server request the client answers (an elicitation) comes back on stdin like any other line. A request the state refuses gets `InvalidRequest` "Method [x] is not allowed." with its id. The sketch stops when the pipe closes, the handshake times out, or the client stops answering pings. PHP warnings go to stderr so stdout carries frames only.
 
 ## The client side
 
@@ -132,7 +132,7 @@ Point your agent at the repo and it has the same context the maintainer has. Poi
 
 ## Resources
 
-* [MCP transports, 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports): the stdio rules this package follows, including the shutdown order and batches.
+* [MCP transports, 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) and [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports): the stdio rules this package follows, including the shutdown order and batches by version.
 * [superconductor/mcp](https://github.com/superconductor-mcp/mcp): the protocol this transport carries.
 * [VenusianPHP](https://github.com/VenusianPHP): sketches and the IOPools loop.
 * [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md): the spec the [`.okf/`](.okf/) bundle follows.
@@ -149,7 +149,7 @@ vendor/bin/pest
 ```
 
 ```console
-Tests:    12 passed (45 assertions)
+Tests:    14 passed (53 assertions)
 ```
 
 ## Contributing

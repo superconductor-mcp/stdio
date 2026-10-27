@@ -11,6 +11,7 @@ use Fabricate\Mechanism\Session\Session;
 use SuperconductorMCP\STDIO\Pipes\StdioPipe;
 use SuperconductorMCP\STDIO\Events\PingDue;
 use SuperconductorMCP\STDIO\Events\PipeClosed;
+use SuperconductorMCP\STDIO\Events\BatchReceived;
 use SuperconductorMCP\STDIO\Events\HandshakeTimedOut;
 use SuperconductorMCP\STDIO\Events\ClientUnresponsive;
 use Fabricate\NutsAndBolts\Messages\Ping\PingRequest;
@@ -47,7 +48,7 @@ class STDIOLoopStartNode extends Node
         /** @var STDIOBag $prepRes */
         $send = fn (string $line) => $this->pipe->send($line);
 
-        foreach ($this->mail as $message) {
+        foreach ($this->expand($this->mail, $prepRes, $send) as $message) {
             if ($message instanceof PipeClosed || $message instanceof HandshakeTimedOut) {
                 return $message;
             } elseif ($message instanceof PingDue) {
@@ -81,11 +82,31 @@ class STDIOLoopStartNode extends Node
         (new Session($bag, $loop))->flushOutbox(fn (string $line) => $pipe->send($line));
     }
 
+    // a batch is opened up for a session that takes batches, and refused whole for one that negotiated 2025-06-18
+    private function expand(array $mail, STDIOBag $bag, \Closure $send): array
+    {
+        $messages = [];
+
+        foreach ($mail as $message) {
+            if (! $message instanceof BatchReceived) {
+                $messages[] = $message;
+            } elseif ($bag->takesBatches()) {
+                array_push($messages, ...$message->messages);
+            } else {
+                $send((new InvalidRequest(null, "Batches are not supported in protocol {$bag->protocol_version}."))->toJson());
+            }
+        }
+
+        return $messages;
+    }
+
     // responses never go through the ledger: their id is one this side already recorded when it sent the request
     protected function processResponse(ReceivedResponse $response, STDIOBag $bag): void
     {
         if (! is_int($response->id) || ! isset($bag->pending_pings[$response->id])) {
-            // nobody is waiting for this id: ignored, as the cancellation rules expect
+            // not a ping: an answer to something the session asked (elicitation), or to nothing at all
+            $this->session->handle($response, fn (string $line) => $this->pipe->send($line));
+
             return;
         }
 

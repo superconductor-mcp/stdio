@@ -24,7 +24,7 @@ sources:
 
 # A frame
 
-The pipe reads on `Readable` wakes, splits lines, decodes each with `LineDecoder` and posts the result as loop mail; EOF on stdin or a failed write posts `PipeClosed` once. The sketch runner hands the frame's mail to `loop($mail)`, which runs a `Flow` over `STDIOLoopStartNode` and then `flushOutbox()`. Latency is therefore one frame: `SKETCH_REFRESH_RATE` 60 gives 16.7 ms, 1000 gives about 1.4 ms round trip.
+The pipe reads on `Readable` wakes, splits lines, decodes each with `LineDecoder` and posts the result as loop mail (a batch line as one `BatchReceived`, opened or refused by the node per the session's version); EOF on stdin or a failed write posts `PipeClosed` once. The sketch runner hands the frame's mail to `loop($mail)`, which runs a `Flow` over `STDIOLoopStartNode` and then `flushOutbox()`. Latency is therefore one frame: `SKETCH_REFRESH_RATE` 60 gives 16.7 ms, 1000 gives about 1.4 ms round trip.
 
 The node, per message:
 

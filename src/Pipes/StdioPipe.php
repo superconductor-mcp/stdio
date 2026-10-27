@@ -5,6 +5,7 @@ namespace SuperconductorMCP\STDIO\Pipes;
 use Fabricate\NutsAndBolts\LineDecoder;
 use SuperconductorMCP\STDIO\Events\InboundLine;
 use SuperconductorMCP\STDIO\Events\PipeClosed;
+use SuperconductorMCP\STDIO\Events\BatchReceived;
 use Voyager\Contracts\IOPools\Loop;
 use Voyager\Contracts\IOPools\WakeReason;
 use Voyager\IOPools\Resources\WakeSource;
@@ -103,10 +104,9 @@ class StdioPipe extends WakeSource
             $this->inbound = substr($this->inbound, $at + 1);
 
             if ($line !== '') {
-                // a batch line posts one mail per message, in order
-                foreach (LineDecoder::decode($line) as $message) {
-                    $this->event_loop->post($message);
-                }
+                // a batch stays together so the node can refuse it whole when the session's version has no batches
+                $messages = LineDecoder::decode($line);
+                $this->event_loop->post(LineDecoder::isBatch($line) ? new BatchReceived($messages) : $messages[0]);
             }
         }
 

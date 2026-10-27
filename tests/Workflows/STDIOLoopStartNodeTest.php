@@ -7,6 +7,12 @@ use SuperconductorMCP\STDIO\STDIOBag;
 use SuperconductorMCP\STDIO\Events\PingDue;
 use SuperconductorMCP\STDIO\Pipes\StdioPipe;
 use SuperconductorMCP\STDIO\Events\PipeClosed;
+use SuperconductorMCP\STDIO\Events\BatchReceived;
+use Fabricate\NutsAndBolts\ToolDefinition;
+use Fabricate\NutsAndBolts\Schema\TextProperty;
+use Fabricate\NutsAndBolts\Schema\StringProperty;
+use Fabricate\NutsAndBolts\Schema\ObjectSchema;
+use Fabricate\Mechanism\Session\Elicitation;
 use SuperconductorMCP\STDIO\Workflows\STDIOLoopStartNode;
 use Fabricate\Mechanism\Session\Lifecycle\IdleState;
 use Fabricate\Mechanism\Session\Lifecycle\HandshakeState;
@@ -178,7 +184,7 @@ it('takes a 2025-03-26 batch line as one message per element and answers each on
         ['jsonrpc' => '2.0', 'id' => 2, 'method' => 'ping'],
         ['jsonrpc' => '2.0', 'id' => 3, 'method' => 'tools/list'],
     ]));
-    expect($mail)->toHaveCount(3);
+    expect($mail)->toHaveCount(1)->and($mail[0])->toBeInstanceOf(BatchReceived::class)->and($mail[0]->messages)->toHaveCount(3);
 
     $bench->frame($mail);
     $wrote = $bench->wrote();
@@ -189,4 +195,46 @@ it('takes a 2025-03-26 batch line as one message per element and answers each on
     // an empty batch is one InvalidRequest with no id
     $bench->frame($bench->feed('[]'));
     expect($bench->wrote()[0]['error']['code'])->toBe(-32600);
+});
+
+it('refuses a batch whole from a 2025-06-18 session', function () {
+    $bench = bench();
+    $bench->frame($bench->feed(json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-06-18', 'capabilities' => (object) [], 'clientInfo' => ['name' => 'c', 'version' => '1']]])));
+    $bench->frame($bench->feed('{"jsonrpc":"2.0","method":"notifications/initialized"}'));
+    $bench->wrote();
+
+    $bench->frame($bench->feed(json_encode([['jsonrpc' => '2.0', 'id' => 2, 'method' => 'ping'], ['jsonrpc' => '2.0', 'id' => 3, 'method' => 'ping']])));
+    $wrote = $bench->wrote();
+
+    expect($wrote)->toHaveCount(1)->and($wrote[0]['id'])->toBeNull()->and($wrote[0]['error']['code'])->toBe(-32600)->and($wrote[0]['error']['data'])->toContain('2025-06-18');
+});
+
+it('asks the client through the pipe and takes its answer off stdin', function () {
+    $bench = bench();
+    $bench->bag->server_configuration = new class extends MCPServer {
+        protected array $entity_info = ['name' => 'bench', 'version' => '1'];
+        protected array $entity_capabilities = ['tools' => []];
+
+        public function tools(): array
+        {
+            return [new ToolDefinition('greet', action: function (): TextProperty {
+                $answer = app(Elicitation::class)->ask('Name?', new ObjectSchema(['name' => new StringProperty()], ['name']));
+
+                return new TextProperty("hello {$answer->content['name']}");
+            })];
+        }
+    };
+    $bench->frame($bench->feed(json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-06-18', 'capabilities' => ['elicitation' => (object) []], 'clientInfo' => ['name' => 'c', 'version' => '1']]])));
+    $bench->frame($bench->feed('{"jsonrpc":"2.0","method":"notifications/initialized"}'));
+    $bench->wrote();
+
+    $bench->frame($bench->feed('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"greet","arguments":{}}}'));
+    $asked = [];
+    $bench->loop->until(function () use ($bench, &$asked): bool { array_push($asked, ...$bench->wrote()); return $asked !== []; });
+    expect($asked[0]['method'])->toBe('elicitation/create');
+
+    $bench->frame($bench->feed(json_encode(['jsonrpc' => '2.0', 'id' => $asked[0]['id'], 'result' => ['action' => 'accept', 'content' => ['name' => 'Ada']]])));
+    $bench->loop->until(function () use ($bench): bool { return ! isset($bench->bag->in_flight[2]); });
+
+    expect($bench->wrote()[0]['result']['content'][0]['text'])->toBe('hello Ada');
 });

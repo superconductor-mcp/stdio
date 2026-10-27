@@ -1,5 +1,11 @@
 # Log
 
+## 2026-10-27 (2025-06-18)
+
+* **Batches by version**: the pipe posts a batch line whole (`BatchReceived`); the node opens it when `takesBatches()` and refuses it with one `InvalidRequest` from a 2025-06-18 session ([sketch](server/sketch.md)).
+* **Answers that are not pings go to the session**, so elicitation works over the pipe.
+* Pest suite: 14 tests, 53 assertions.
+
 ## 2026-10-26 (2025-03-26)
 
 * **Session logic moved up** to superconductor/mcp `Mechanism\Session`; `STDIOBag` extends `SessionBag`, the node delegates requests, notifications and decoder errors, keeps pings and timers ([lifecycle](server/lifecycle.md)). Config action classes now `Fabricate\Mechanism\Session\Actions\*`.
