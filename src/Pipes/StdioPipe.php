@@ -103,7 +103,10 @@ class StdioPipe extends WakeSource
             $this->inbound = substr($this->inbound, $at + 1);
 
             if ($line !== '') {
-                $this->event_loop->post(LineDecoder::decodeString($line));
+                // a batch line posts one mail per message, in order
+                foreach (LineDecoder::decode($line) as $message) {
+                    $this->event_loop->post($message);
+                }
             }
         }
 

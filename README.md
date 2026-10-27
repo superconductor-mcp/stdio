@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/superconductor-mcp/stdio/tests.yml?style=flat-square&label=CI)](https://github.com/superconductor-mcp/stdio/actions/workflows/tests.yml)
 [![Packagist](https://img.shields.io/packagist/v/semiconductor/stdio?style=flat-square)](https://packagist.org/packages/semiconductor/stdio)
 [![PHP](https://img.shields.io/packagist/dependency-v/semiconductor/stdio/php?style=flat-square&label=PHP)](https://packagist.org/packages/semiconductor/stdio)
-[![MCP](https://img.shields.io/badge/MCP-2024--11--05-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports)
+[![MCP](https://img.shields.io/badge/MCP-2025--03--26-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
 [![License](https://img.shields.io/github/license/superconductor-mcp/stdio?style=flat-square)](LICENSE)
 [![OKF](https://img.shields.io/badge/OKF-0.2-6f42c1?style=flat-square&label=knowledge%20bundle)](.okf/index.md)
 
@@ -76,8 +76,8 @@ php computer vendor:publish --tag=stdio-config
 Verify with a one-line handshake:
 
 ```console
-$ printf '%s\n' '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"me","version":"1"}}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":1,"method":"ping"}' | php rocket mcp:cli concept
-{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2024-11-05","capabilities":{…},"serverInfo":{…}}}
+$ printf '%s\n' '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"me","version":"1"}}}' '[{"jsonrpc":"2.0","method":"notifications/initialized"},{"jsonrpc":"2.0","id":1,"method":"ping"}]' | php rocket mcp:cli concept
+{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2025-03-26","capabilities":{…},"serverInfo":{…}}}
 {"jsonrpc":"2.0","id":1,"result":{}}
 ```
 
@@ -89,7 +89,7 @@ $ printf '%s\n' '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protoc
 |---|---|---|
 | `handshake.stop_waiting.enabled` / `.ttl` | `true` / `60` | A client that sends `initialize` but never `notifications/initialized` is dropped after this many seconds. |
 | `ping_time.enabled` / `.ttl` / `.max_misses` | `true` / `10` / `3` | The server pings its client every `ttl` seconds in every state but Idle; this many unanswered in a row stops the server. |
-| `notifications` | `initialized`, `cancelled` | Method to Action class. A notification not listed is logged and ignored. |
+| `notifications` | `initialized`, `cancelled` | Method to Action class (`Fabricate\Mechanism\Session\Actions`). A notification not listed is logged and ignored. |
 | `client.shutdown_grace` | `2` | Seconds a closing connection waits for the server to exit after closing its stdin, and again after `SIGTERM`, before escalating. |
 
 The server's response latency is one sketch frame, set by `SKETCH_REFRESH_RATE` in the application's `.env` (60 Hz is 16.7 ms). A server that needs less puts a higher rate in its entry's `env`.
@@ -104,7 +104,7 @@ The server's response latency is one sketch frame, set by `SKETCH_REFRESH_RATE` 
 | Handshake | `initialize`, `ping`, `logging/setLevel` | `notifications/initialized`, or `stop_waiting` running out |
 | Available | everything but `initialize` | the pipe closing, or `max_misses` unanswered pings |
 
-A request the state refuses gets `InvalidRequest` "Method [x] is not allowed." with its id. The sketch stops when the pipe closes, the handshake times out, or the client stops answering pings. PHP warnings go to stderr so stdout carries frames only.
+A line may be a JSON-RPC batch; each message in it is handled in order and each request answered on its own line. A request the state refuses gets `InvalidRequest` "Method [x] is not allowed." with its id. The sketch stops when the pipe closes, the handshake times out, or the client stops answering pings. PHP warnings go to stderr so stdout carries frames only.
 
 ## The client side
 
@@ -132,7 +132,7 @@ Point your agent at the repo and it has the same context the maintainer has. Poi
 
 ## Resources
 
-* [MCP transports, 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports): the stdio rules this package follows, including the shutdown order.
+* [MCP transports, 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports): the stdio rules this package follows, including the shutdown order and batches.
 * [superconductor/mcp](https://github.com/superconductor-mcp/mcp): the protocol this transport carries.
 * [VenusianPHP](https://github.com/VenusianPHP): sketches and the IOPools loop.
 * [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md): the spec the [`.okf/`](.okf/) bundle follows.
@@ -149,7 +149,7 @@ vendor/bin/pest
 ```
 
 ```console
-Tests:    11 passed (37 assertions)
+Tests:    12 passed (45 assertions)
 ```
 
 ## Contributing

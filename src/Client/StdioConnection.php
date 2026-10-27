@@ -181,7 +181,7 @@ class StdioConnection extends WakeSource implements Connection
             $this->inbound = substr($this->inbound, $at + 1);
 
             if ($line !== '') {
-                $messages[] = LineDecoder::decodeString($line);
+                array_push($messages, ...LineDecoder::decode($line));
             }
         }
 

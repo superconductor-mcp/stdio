@@ -2,14 +2,15 @@
 
 use Voyager\Workflows\Flow;
 use Voyager\Contracts\IOPools\Loop;
+use Voyager\IOPools\Waiter\Wakes\Readable;
 use SuperconductorMCP\STDIO\STDIOBag;
 use SuperconductorMCP\STDIO\Events\PingDue;
 use SuperconductorMCP\STDIO\Pipes\StdioPipe;
 use SuperconductorMCP\STDIO\Events\PipeClosed;
 use SuperconductorMCP\STDIO\Workflows\STDIOLoopStartNode;
-use SuperconductorMCP\STDIO\StateMachines\Lifecycle\IdleState;
-use SuperconductorMCP\STDIO\StateMachines\Lifecycle\HandshakeState;
-use SuperconductorMCP\STDIO\StateMachines\Lifecycle\AvailableState;
+use Fabricate\Mechanism\Session\Lifecycle\IdleState;
+use Fabricate\Mechanism\Session\Lifecycle\HandshakeState;
+use Fabricate\Mechanism\Session\Lifecycle\AvailableState;
 use Fabricate\Server\MCPServer;
 use Fabricate\NutsAndBolts\LineDecoder;
 use Fabricate\NutsAndBolts\Messages\Ping\PingRequest;
@@ -50,6 +51,15 @@ final class Bench
     public function line(array $message): mixed
     {
         return LineDecoder::decodeString(json_encode(['jsonrpc' => '2.0', ...$message]));
+    }
+
+    // what the client writes, read by the pipe on a Readable wake; returns the mail the pipe posted
+    public function feed(string $line): array
+    {
+        fwrite($this->client_in, $line."\n");
+        $this->pipe->woke([new Readable($this->client_in)]);
+
+        return $this->loop->registry->mail();
     }
 
     /** @return list<array> every line the server wrote since the last read */
@@ -156,4 +166,27 @@ it('runs an async procedure in a fiber and answers once it finishes', function (
 it('stops when the pipe closes', function () {
     $bench = bench();
     expect($bench->frame([new PipeClosed()]))->toBe('pipe-closed');
+});
+
+it('takes a 2025-03-26 batch line as one message per element and answers each on its own line', function () {
+    $bench = bench();
+    $bench->frame($bench->feed(json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-03-26', 'capabilities' => [], 'clientInfo' => ['name' => 'c', 'version' => '1']]])));
+    expect($bench->wrote()[0]['result']['protocolVersion'])->toBe('2025-03-26');
+
+    $mail = $bench->feed(json_encode([
+        ['jsonrpc' => '2.0', 'method' => 'notifications/initialized'],
+        ['jsonrpc' => '2.0', 'id' => 2, 'method' => 'ping'],
+        ['jsonrpc' => '2.0', 'id' => 3, 'method' => 'tools/list'],
+    ]));
+    expect($mail)->toHaveCount(3);
+
+    $bench->frame($mail);
+    $wrote = $bench->wrote();
+    expect($bench->bag->state)->toBeInstanceOf(AvailableState::class)
+        ->and(array_column($wrote, 'id'))->toBe([2, 3])
+        ->and($wrote[1]['result']['tools'])->toBe([]);
+
+    // an empty batch is one InvalidRequest with no id
+    $bench->frame($bench->feed('[]'));
+    expect($bench->wrote()[0]['error']['code'])->toBe(-32600);
 });

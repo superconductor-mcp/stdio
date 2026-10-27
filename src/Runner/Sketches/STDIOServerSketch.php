@@ -58,7 +58,7 @@ class STDIOServerSketch extends StartMCPServer
         }
 
         // notifications queued outside any request (timers, sensors, background work) go out on the next frame
-        STDIOLoopStartNode::flushOutbox($this->bag, $this->pipe);
+        STDIOLoopStartNode::flushOutbox($this->bag, $this->pipe, $this->event_loop);
 
         return SketchLoopResult::CONTINUE;
     }

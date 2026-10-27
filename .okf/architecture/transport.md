@@ -5,7 +5,7 @@ description: What this package owns (the two ends of the pipe) and what it leave
 resource: src
 tags: [mcp, stdio, transport]
 status: draft
-generated: { by: claude-fable/5.1, at: 2026-10-26T04:30:00Z }
+generated: { by: claude-fable/5.1, at: 2026-10-26T15:30:00Z }
 sources:
   - id: provider
     resource: src/Providers/STDIOServiceProvider.php
@@ -18,6 +18,8 @@ sources:
 # Lines, not protocol
 
 MCP's stdio transport is newline-delimited JSON-RPC on a child process's stdin and stdout. This package moves those lines and runs the lifecycle around them; what a line means is superconductor/mcp's (`LineDecoder`, the procedures, the client node).
+
+A line may be a 2025-03-26 batch. Both ends call `LineDecoder::decode()` and get a list: the server pipe posts one mail per element, in order, and answers each request on its own line; the client connection hands the whole list to its client. Neither end writes a batch.
 
 # What the provider wires
 

@@ -33,4 +33,12 @@ while (($line = fgets(STDIN)) !== false) {
     if ($message['method'] === 'tools/call' && ($message['params']['name'] ?? '') === 'ping-me') {
         fwrite(STDOUT, json_encode(['jsonrpc' => '2.0', 'id' => 0, 'method' => 'ping'])."\n");
     }
+
+    // or to send a JSON-RPC batch: a ping and a list_changed on one line
+    if ($message['method'] === 'tools/call' && ($message['params']['name'] ?? '') === 'batch-me') {
+        fwrite(STDOUT, json_encode([
+            ['jsonrpc' => '2.0', 'id' => 'b', 'method' => 'ping'],
+            ['jsonrpc' => '2.0', 'method' => 'notifications/tools/list_changed'],
+        ])."\n");
+    }
 }

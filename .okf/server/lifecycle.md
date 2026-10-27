@@ -2,14 +2,14 @@
 type: Server
 title: Lifecycle
 description: Idle, Handshake, Available; the timers on the bag; server pings with their own ids; notifications through the config map.
-resource: src/StateMachines/Lifecycle
+resource: src/STDIOBag.php
 tags: [mcp, stdio, lifecycle, ping]
 status: draft
-generated: { by: claude-fable/5.1, at: 2026-10-26T04:30:00Z }
+generated: { by: claude-fable/5.1, at: 2026-10-26T18:00:00Z }
 sources:
   - id: states
-    resource: src/StateMachines/Lifecycle/LifecycleState.php
-    title: LifecycleState
+    resource: https://github.com/superconductor-mcp/mcp/blob/main/src/Fabricate/Mechanism/Session/Lifecycle/LifecycleState.php
+    title: LifecycleState (superconductor/mcp)
   - id: bag
     resource: src/STDIOBag.php
     title: STDIOBag
@@ -30,7 +30,7 @@ A refusal is `InvalidRequest` with the request's id. Entering Idle clears the le
 
 # The bag
 
-`STDIOBag` extends `MCPServerBag` with `state`, `their_ids`, `own_ids`, `stop_waiting`, `ping_timer`, `pending_pings`, `ping_misses`, `in_flight`, `cancelled`.
+Since 2025-03-26 the states, `their_ids`, `own_ids`, `in_flight`, `cancelled` and the two actions live in superconductor/mcp's `Mechanism\Session` (`SessionBag`, `Session`). `STDIOBag` extends `SessionBag` with what only a pipe needs: `stop_waiting`, `ping_timer`, `pending_pings`, `ping_misses`. `STDIOLoopStartNode` builds a `Session` per frame, hangs `stateChanged()` on `onStateChange()`, and handles only `PingDue`, `PipeClosed`, `HandshakeTimedOut` and ping replies itself.
 
 # Timers restart on every state change
 
@@ -44,4 +44,4 @@ Ids are per requestor: the server's 0, 1, 2… never collide with the client's 0
 
 # Notifications
 
-`stdio.notifications` maps a method to an Action class with `handle(STDIOBag &$bag, ?Notification $notification)`. Shipped: `notifications/initialized` → `InitializedAction` (next state, cancel `stop_waiting`); `notifications/cancelled` → `CancelledAction` (log; mark `cancelled[id]` only when the request is in flight, so its response is dropped). A developer adds a method to the map to handle more; a method not in the map is logged and ignored.
+`stdio.notifications` maps a method to an Action class with `handle(SessionBag $bag, ?Notification $notification)`. Shipped from `Fabricate\Mechanism\Session\Actions`: `notifications/initialized` → `InitializedAction` (next state; the node's state hook cancels `stop_waiting`); `notifications/cancelled` → `CancelledAction` (log; mark `cancelled[id]` only when the request is in flight, so its response is dropped). A developer adds a method to the map to handle more; a method not in the map is logged and ignored.

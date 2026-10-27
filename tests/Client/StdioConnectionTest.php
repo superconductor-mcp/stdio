@@ -29,6 +29,11 @@ it('runs a server as a child process and talks to it over its pipes', function (
     $client->callTool('ping-me')->wait();
     $loop->until(fn (): bool => str_contains(json_encode(log_entries()), 'mcp.incoming ping'));
 
+    // a batch line from the server is every message in it: the ping gets its answer, the list_changed refills tools
+    $client->callTool('batch-me')->wait();
+    $loop->until(fn (): bool => substr_count(json_encode(log_entries()), 'mcp.incoming ping') === 2);
+    expect($client->status())->toBe(ClientStatus::Connected)->and(array_column($client->tools(), 'name'))->toBe(['noop']);
+
     $client->close();
     $loop->until(fn (): bool => $client->closed());
 

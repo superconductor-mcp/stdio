@@ -1,7 +1,7 @@
 <?php
 
-use SuperconductorMCP\STDIO\Actions\CancelledAction;
-use SuperconductorMCP\STDIO\Actions\InitializedAction;
+use Fabricate\Mechanism\Session\Actions\CancelledAction;
+use Fabricate\Mechanism\Session\Actions\InitializedAction;
 
 return [
     'handshake' => [

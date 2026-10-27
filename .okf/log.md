@@ -1,5 +1,12 @@
 # Log
 
+## 2026-10-26 (2025-03-26)
+
+* **Session logic moved up** to superconductor/mcp `Mechanism\Session`; `STDIOBag` extends `SessionBag`, the node delegates requests, notifications and decoder errors, keeps pings and timers ([lifecycle](server/lifecycle.md)). Config action classes now `Fabricate\Mechanism\Session\Actions\*`.
+* **Batch lines taken on both ends**: one mail per element on the server, one list to the client; replies stay one per line ([transport](architecture/transport.md)).
+* Protocol versions follow superconductor/mcp: 2025-03-26 proposed, 2024-11-05 kept.
+* Pest suite: 12 tests, 45 assertions.
+
 ## 2026-10-26
 
 * **Client end**: `StdioConnection` and the `stdio` creator on `mcp.clients`; a missing command is named before anything is spawned; close runs on loop timers in the spec's order ([connection](client/connection.md)). Proven against the dev app's concept server, neo4j-mcp 1.5.3 and `sleep`.
