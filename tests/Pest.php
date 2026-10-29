@@ -24,7 +24,7 @@ function bareApp(array $stdio = [], array $mcp = [], ?EventLoop $loop = null): C
     ControlPanel::setInstance($app);
 
     $app->registerInstance('config', new Repository([
-        'mcp' => array_replace_recursive(require dirname(__DIR__, 2).'/mcp/config/mcp.php', $mcp),
+        'mcp' => array_replace_recursive(require dirname(__DIR__).'/vendor/superconductor/core/config/mcp.php', $mcp),
         'stdio' => array_replace_recursive(require dirname(__DIR__).'/config/stdio.php', $stdio),
     ]));
     $app->registerInstance('log', new FakeLog());

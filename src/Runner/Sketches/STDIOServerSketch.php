@@ -5,7 +5,7 @@ namespace SuperconductorMCP\STDIO\Runner\Sketches;
 
 use ReflectionException;
 use Voyager\Workflows\Flow;
-use Fabricate\Server\MCPServer;
+use Fabricate\Contracts\Server\MCPServer;
 use Voyager\Contracts\IOPools\Loop;
 use SuperconductorMCP\STDIO\STDIOBag;
 use Fabricate\Server\ServerRepository;

@@ -2,9 +2,9 @@
 okf_version: "0.2"
 ---
 
-# semiconductor/stdio
+# superconductor/stdio
 
-* [Transport](architecture/transport.md) - What this package owns (the two ends of the pipe) and what it leaves to superconductor/mcp.
+* [Transport](architecture/transport.md) - What this package owns (the two ends of the pipe) and what it leaves to superconductor/core.
 
 # Server
 

@@ -1,5 +1,12 @@
 # Log
 
+## 2026-10-28 (0.11.0)
+
+* **Package renamed** `semiconductor/stdio` to `superconductor/stdio`; it requires `superconductor/core` (formerly `superconductor/mcp`) `^0.11.0` ([transport](architecture/transport.md)).
+* **Contracts**: the sketch registers the running server under `Contracts\Server\MCPServer` and holds it through that type; the `stdio` creator returns `Contracts\Client\MCPClient`. `StdioConnection` holds the concrete `Fabricate\Client\MCPClient`, because `receive()` and `connectionClosed()` are not on the contract; `ClientStatus` is now `Contracts\Client\ClientStatus` ([sketch](server/sketch.md), [connection](client/connection.md)).
+* **Tests** read core's `config/mcp.php` from `vendor/superconductor/core` instead of a sibling checkout; `venusian/framework ^0.11.0` joins require-dev because the code calls `config()` and `app()`. PHP is `~8.4.27||^8.5.12`.
+* No wire or behaviour change; the protocol line is unchanged (2025-06-18, 2025-03-26, 2024-11-05). Pest suite: 14 tests, 53 assertions.
+
 ## 2026-10-27 (2025-06-18)
 
 * **Batches by version**: the pipe posts a batch line whole (`BatchReceived`); the node opens it when `takesBatches()` and refuses it with one `InvalidRequest` from a 2025-06-18 session ([sketch](server/sketch.md)).

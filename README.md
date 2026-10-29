@@ -1,11 +1,11 @@
 <div align="center" id="header">
 
-<h1>semiconductor/stdio</h1>
+<h1>superconductor/stdio</h1>
 <h3>The stdio transport for Superconductor MCP: serve over your own pipes, consume over theirs</h3>
 
 [![CI](https://img.shields.io/github/actions/workflow/status/superconductor-mcp/stdio/tests.yml?style=flat-square&label=CI)](https://github.com/superconductor-mcp/stdio/actions/workflows/tests.yml)
-[![Packagist](https://img.shields.io/packagist/v/semiconductor/stdio?style=flat-square)](https://packagist.org/packages/semiconductor/stdio)
-[![PHP](https://img.shields.io/packagist/dependency-v/semiconductor/stdio/php?style=flat-square&label=PHP)](https://packagist.org/packages/semiconductor/stdio)
+[![Packagist](https://img.shields.io/packagist/v/superconductor/stdio?style=flat-square)](https://packagist.org/packages/superconductor/stdio)
+[![PHP](https://img.shields.io/packagist/dependency-v/superconductor/stdio/php?style=flat-square&label=PHP)](https://packagist.org/packages/superconductor/stdio)
 [![MCP](https://img.shields.io/badge/MCP-2025--06--18-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
 [![License](https://img.shields.io/github/license/superconductor-mcp/stdio?style=flat-square)](LICENSE)
 [![OKF](https://img.shields.io/badge/OKF-0.2-6f42c1?style=flat-square&label=knowledge%20bundle)](.okf/index.md)
@@ -14,15 +14,15 @@
 
 MCP's stdio transport is the simplest one there is: the client starts the server as a child process, writes JSON-RPC lines to its stdin and reads them from its stdout. Every harness supports it, every SDK ships it, and a server that speaks it needs no port, no TLS and no network.
 
-[superconductor/mcp](https://github.com/superconductor-mcp/mcp) speaks the protocol but knows no transport by name. <b>The only problem?</b> Someone has to own the pipes.
+[superconductor/core](https://github.com/superconductor-mcp/core) speaks the protocol but knows no transport by name. <b>The only problem?</b> Someone has to own the pipes.
 
-semiconductor/stdio owns both ends. On the server side it is a sketch, `rocket mcp:cli <server>`, that puts stdin and stdout on the application's event loop and runs the lifecycle around superconductor/mcp's procedures. On the client side it is a `StdioConnection` that spawns the server named in `mcp_servers`, joins its pipes to the same loop, and hands every decoded line straight to its `MCPClient`.
+superconductor/stdio owns both ends. On the server side it is a sketch, `rocket mcp:cli <server>`, that puts stdin and stdout on the application's event loop and runs the lifecycle around superconductor/core's procedures. On the client side it is a `StdioConnection` that spawns the server named in `mcp_servers`, joins its pipes to the same loop, and hands every decoded line straight to its `MCPClient`.
 
 ## Basic usage
 
-Most ways you will interface with semiconductor/stdio are in two parts -
+Most ways you will interface with superconductor/stdio are in two parts -
 
-**Serving** a server defined with superconductor/mcp:
+**Serving** a server defined with superconductor/core:
 
 ```bash
 php rocket mcp:cli concept
@@ -56,15 +56,15 @@ $neo4j->callTool('get-schema')->wait()->content;
 
 | | |
 |---|---|
-| PHP | 8.4 or newer, with `proc_open` available. |
-| VenusianPHP | A 0.10 application with `venusian-voyager/io-pools` and `sketches`. |
-| superconductor/mcp | 0.10. This package adds the transport only. |
+| PHP | 8.4.27 or newer in 8.4, or 8.5.12 or newer, with `proc_open` available. |
+| VenusianPHP | A 0.11 application with `venusian-voyager/io-pools` and `sketches`. |
+| superconductor/core | 0.11. This package adds the transport only. |
 | Platform | macOS and Linux. On macOS the server sketch needs a pipe or a terminal on stdin; kqueue refuses `/dev/null`. |
 
 ## Installation
 
 ```bash
-composer require superconductor/mcp semiconductor/stdio
+composer require superconductor/core superconductor/stdio
 ```
 
 The provider is discovered. It merges `config/stdio.php`, adds `mcp:cli` to the application's sketches and registers the `stdio` client creator on `mcp.clients`. Publish the config to change any of it:
@@ -116,7 +116,7 @@ Closing follows the spec's order on loop timers, so several connections close si
 
 | Package | Gives |
 |---|---|
-| [superconductor/mcp](https://github.com/superconductor-mcp/mcp) | The protocol: servers, clients, messages, procedures. Required. |
+| [superconductor/core](https://github.com/superconductor-mcp/core) | The protocol: servers, clients, messages, procedures. Required. |
 
 ## AI-assisted development
 
@@ -133,13 +133,13 @@ Point your agent at the repo and it has the same context the maintainer has. Poi
 ## Resources
 
 * [MCP transports, 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) and [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports): the stdio rules this package follows, including the shutdown order and batches by version.
-* [superconductor/mcp](https://github.com/superconductor-mcp/mcp): the protocol this transport carries.
+* [superconductor/core](https://github.com/superconductor-mcp/core): the protocol this transport carries.
 * [VenusianPHP](https://github.com/VenusianPHP): sketches and the IOPools loop.
 * [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md): the spec the [`.okf/`](.okf/) bundle follows.
 
 ## Running the test suite
 
-The suite is Pest v4. The connection tests run real children: a fixture server in `tests/Fixtures/echo-server.php` under the PHP that runs the tests, and `sleep` for the server that ignores a closed stdin. The start node runs on socket pairs. No test needs a terminal or a network.
+The suite is Pest v4. The connection tests run real children: a fixture server in `tests/Fixtures/echo-server.php` under the PHP that runs the tests, and `sleep` for the server that ignores a closed stdin. The start node runs on socket pairs. No test needs a terminal or a network. The tests read superconductor/core's `config/mcp.php` from `vendor/superconductor/core`, so core must be installed; `venusian/framework` is in `require-dev` because the code calls `config()` and `app()`.
 
 ```bash
 git clone https://github.com/superconductor-mcp/stdio.git
@@ -154,7 +154,7 @@ Tests:    14 passed (53 assertions)
 
 ## Contributing
 
-Open an issue first for anything beyond a typo. Pull requests come with a Pest test for the behaviour and keep CI green. A protocol change goes to superconductor/mcp first; this package moves lines. Read [`AGENTS.md`](AGENTS.md) for the rules the code follows.
+Open an issue first for anything beyond a typo. Pull requests come with a Pest test for the behaviour and keep CI green. A protocol change goes to superconductor/core first; this package moves lines. Read [`AGENTS.md`](AGENTS.md) for the rules the code follows.
 
 ## Security
 

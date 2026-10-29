@@ -5,7 +5,7 @@ description: rocket mcp:cli <server>: the pipe on the loop, one frame per batch 
 resource: src/Runner/Sketches/STDIOServerSketch.php
 tags: [mcp, stdio, sketch, frame]
 status: draft
-generated: { by: claude-fable/5.1, at: 2026-10-26T04:30:00Z }
+generated: { by: claude-sonnet-5-5/claude-code, at: 2026-10-28T23:00:00Z }
 sources:
   - id: sketch
     resource: src/Runner/Sketches/STDIOServerSketch.php
@@ -20,7 +20,7 @@ sources:
 
 # Boot
 
-`#[Sketch('mcp:cli {server : The name of the MCP server to start}')]`. `boot()` routes PHP errors to stderr, puts a `StdioPipe(STDIN, STDOUT)` on the loop as `mcp.stdio`, pulls the named server from the `ServerRepository` (an unknown name throws before the first frame), puts it on the `STDIOBag`, registers it in the container under its class and `MCPServer::class`, and copies `stdio.notifications` onto the bag.
+`#[Sketch('mcp:cli {server : The name of the MCP server to start}')]`. `boot()` routes PHP errors to stderr, puts a `StdioPipe(STDIN, STDOUT)` on the loop as `mcp.stdio`, pulls the named server from the `ServerRepository` (an unknown name throws before the first frame), puts it on the `STDIOBag`, registers it in the container under its class and `Contracts\Server\MCPServer`, and copies `stdio.notifications` onto the bag.
 
 # A frame
 

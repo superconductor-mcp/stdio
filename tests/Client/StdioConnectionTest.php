@@ -1,7 +1,7 @@
 <?php
 
 use Fabricate\Client\MCPClient;
-use Fabricate\Client\ClientStatus;
+use Fabricate\Contracts\Client\ClientStatus;
 use Voyager\Contracts\IOPools\Loop;
 use SuperconductorMCP\STDIO\Client\StdioConnection;
 

@@ -5,11 +5,11 @@ description: Idle, Handshake, Available; the timers on the bag; server pings wit
 resource: src/STDIOBag.php
 tags: [mcp, stdio, lifecycle, ping]
 status: draft
-generated: { by: claude-fable/5.1, at: 2026-10-26T18:00:00Z }
+generated: { by: claude-sonnet-5-5/claude-code, at: 2026-10-28T23:00:00Z }
 sources:
   - id: states
-    resource: https://github.com/superconductor-mcp/mcp/blob/main/src/Fabricate/Mechanism/Session/Lifecycle/LifecycleState.php
-    title: LifecycleState (superconductor/mcp)
+    resource: https://github.com/superconductor-mcp/core/blob/main/src/Fabricate/Mechanism/Session/Lifecycle/LifecycleState.php
+    title: LifecycleState (superconductor/core)
   - id: bag
     resource: src/STDIOBag.php
     title: STDIOBag
@@ -30,7 +30,7 @@ A refusal is `InvalidRequest` with the request's id. Entering Idle clears the le
 
 # The bag
 
-Since 2025-03-26 the states, `their_ids`, `own_ids`, `in_flight`, `cancelled` and the two actions live in superconductor/mcp's `Mechanism\Session` (`SessionBag`, `Session`). `STDIOBag` extends `SessionBag` with what only a pipe needs: `stop_waiting`, `ping_timer`, `pending_pings`, `ping_misses`. `STDIOLoopStartNode` builds a `Session` per frame, hangs `stateChanged()` on `onStateChange()`, and handles only `PingDue`, `PipeClosed`, `HandshakeTimedOut` and ping replies itself.
+Since 2025-03-26 the states, `their_ids`, `own_ids`, `in_flight`, `cancelled` and the two actions live in superconductor/core's `Mechanism\Session` (`SessionBag`, `Session`). `STDIOBag` extends `SessionBag` with what only a pipe needs: `stop_waiting`, `ping_timer`, `pending_pings`, `ping_misses`. `STDIOLoopStartNode` builds a `Session` per frame, hangs `stateChanged()` on `onStateChange()`, and handles only `PingDue`, `PipeClosed`, `HandshakeTimedOut` and ping replies itself.
 
 # Timers restart on every state change
 

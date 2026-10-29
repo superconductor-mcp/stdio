@@ -4,6 +4,7 @@ namespace SuperconductorMCP\STDIO\Providers;
 
 use Fabricate\Client\MCPClient;
 use Fabricate\Client\ClientManager;
+use Fabricate\Contracts\Client\MCPClient as ClientContract;
 use Voyager\Contracts\IOPools\Loop;
 use Voyager\Contracts\Core\FrameworkCore;
 use SuperconductorMCP\STDIO\Client\StdioConnection;
@@ -27,7 +28,7 @@ class STDIOServiceProvider extends ServiceProvider
         ], 'stdio-config');
 
         // an mcp_servers entry of type stdio becomes a client whose connection is the server's own pipes
-        $this->app->make(ClientManager::class)->extend('stdio', function (FrameworkCore $app, array $config): MCPClient {
+        $this->app->make(ClientManager::class)->extend('stdio', function (FrameworkCore $app, array $config): ClientContract {
             $loop = $app->make(Loop::class);
             $client = new MCPClient($config['name'], $loop);
 

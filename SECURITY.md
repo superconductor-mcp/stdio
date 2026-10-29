@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-semiconductor/stdio is pre-1.0. No 0.x release receives security fixes or advisories; fixes land in the
+superconductor/stdio is pre-1.0. No 0.x release receives security fixes or advisories; fixes land in the
 next release line. Security support starts with 1.0.
 
 | Version | Security fixes |
@@ -22,9 +22,9 @@ to reproduce. Reports are read and weighed for the release line in development; 
 is no response-time commitment.
 ## Security model
 
-semiconductor/stdio is the stdio transport for superconductor/mcp: newline-delimited JSON-RPC over a process's
-own standard streams. The protocol checks (decoding, lifecycle, ids, capabilities) are superconductor/mcp's
-and are described in [its SECURITY.md](https://github.com/superconductor-mcp/mcp/blob/main/SECURITY.md).
+superconductor/stdio is the stdio transport for superconductor/core: newline-delimited JSON-RPC over a process's
+own standard streams. The protocol checks (decoding, lifecycle, ids, capabilities) are superconductor/core's
+and are described in [its SECURITY.md](https://github.com/superconductor-mcp/core/blob/main/SECURITY.md).
 This package adds the two ends of the pipe.
 
 - **Server end: `rocket mcp:cli <server>`.** The sketch reads stdin and writes stdout, nothing else. Whoever
@@ -41,5 +41,5 @@ This package adds the two ends of the pipe.
   past `stdio.handshake.stop_waiting.ttl`, or a closed pipe each stop the server sketch.
 
 A report is in scope when this package reads from or writes to something other than the streams it is
-given, leaves a child process running after a close, or lets a frame through that superconductor/mcp's
+given, leaves a child process running after a close, or lets a frame through that superconductor/core's
 decoder would have refused.

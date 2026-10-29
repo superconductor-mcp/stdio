@@ -20,7 +20,7 @@ use Fabricate\NutsAndBolts\Messages\Responses\ReceivedResponse;
 use Fabricate\Mechanism\Session\Lifecycle\IdleState;
 use Fabricate\Mechanism\Session\Lifecycle\HandshakeState;
 
-// one frame of the stdio server: the session logic lives in superconductor/mcp, this node adds the pipe, the pings and the timers
+// one frame of the stdio server: the session logic lives in superconductor/core, this node adds the pipe, the pings and the timers
 class STDIOLoopStartNode extends Node
 {
     private Session $session;
