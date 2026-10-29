@@ -1,5 +1,9 @@
 # Log
 
+## 2026-10-29 (2025-11-25)
+
+* **Protocol 2025-11-25** through superconductor/core; no change to the pipe. The stdio clarifications are ones this package already meets: a server may write any logging to stderr (PHP's own warnings already go there), and a client does not read stderr as failure (`StdioConnection` keeps its tail only to explain an exit).
+
 ## 2026-10-28 (0.11.0)
 
 * **Package renamed** `semiconductor/stdio` to `superconductor/stdio`; it requires `superconductor/core` (formerly `superconductor/mcp`) `^0.11.0` ([transport](architecture/transport.md)).

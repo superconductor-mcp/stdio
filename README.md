@@ -6,7 +6,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/superconductor-mcp/stdio/tests.yml?style=flat-square&label=CI)](https://github.com/superconductor-mcp/stdio/actions/workflows/tests.yml)
 [![Packagist](https://img.shields.io/packagist/v/superconductor/stdio?style=flat-square)](https://packagist.org/packages/superconductor/stdio)
 [![PHP](https://img.shields.io/packagist/dependency-v/superconductor/stdio/php?style=flat-square&label=PHP)](https://packagist.org/packages/superconductor/stdio)
-[![MCP](https://img.shields.io/badge/MCP-2025--06--18-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
+[![MCP](https://img.shields.io/badge/MCP-2025--11--25-5b4ee6?style=flat-square)](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 [![License](https://img.shields.io/github/license/superconductor-mcp/stdio?style=flat-square)](LICENSE)
 [![OKF](https://img.shields.io/badge/OKF-0.2-6f42c1?style=flat-square&label=knowledge%20bundle)](.okf/index.md)
 
@@ -132,7 +132,7 @@ Point your agent at the repo and it has the same context the maintainer has. Poi
 
 ## Resources
 
-* [MCP transports, 2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) and [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports): the stdio rules this package follows, including the shutdown order and batches by version.
+* [MCP transports, 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports), [2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports) and [2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports): the stdio rules this package follows, including the shutdown order and batches by version.
 * [superconductor/core](https://github.com/superconductor-mcp/core): the protocol this transport carries.
 * [VenusianPHP](https://github.com/VenusianPHP): sketches and the IOPools loop.
 * [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md): the spec the [`.okf/`](.okf/) bundle follows.
