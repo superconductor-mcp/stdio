@@ -10,6 +10,8 @@ use Fabricate\Server\MCPServer;
 use ReflectionException;
 use SuperconductorMCP\STDIO\Events\BatchReceived;
 use SuperconductorMCP\STDIO\Events\PipeClosed;
+use SuperconductorMCP\STDIO\Events\ServerClosed;
+use Voyager\Contracts\IOPools\Loop;
 
 /**
  * A 2026-07-28 server over stdio. There is no handshake: every request names its protocol version and client
@@ -54,8 +56,14 @@ trait StatelessServerFunctionality
         {
             if($message instanceof PipeClosed)
             {
-                // Ending the server cancels its open subscriptions; whatever that sends goes out before the pipe goes.
+                // Ending the server cancels and answers its open subscriptions, as mail; the process ends once it's sent.
                 $this->server->close();
+                app(Loop::class)->post(new ServerClosed());
+                return;
+            }
+
+            if($message instanceof ServerClosed)
+            {
                 signal('pipe-closed');
                 return;
             }

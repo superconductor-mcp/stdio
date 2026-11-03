@@ -231,7 +231,7 @@ trait StatefulServerFunctionality
      */
     private function processInitialization(array $mail): void
     {
-        foreach($mail as $message)
+        foreach(array_values($mail) as $at => $message)
         {
             if($message instanceof PipeClosed)
             {
@@ -289,6 +289,10 @@ trait StatefulServerFunctionality
 
                         // @todo - only fire if logging level is appropriate and dont' send if off.
                         $this->say("Session started on version {$this->negotiated_protocol_version}.");
+
+                        // What came in after it, in the same read, is the started session's.
+                        $this->processMail(array_slice(array_values($mail), $at + 1));
+                        return;
                     }
                 }
                 elseif($message instanceof PingRequest && (!is_null($this->negotiated_protocol_version)))

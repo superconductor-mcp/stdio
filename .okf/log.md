@@ -2,6 +2,7 @@
 
 ## 2026-11-03
 
+* **Fix**: [Package](orientation/package.md): `mcp:cli` lost the subscription teardown sent when stdin closed, stopping before the mail carrying it arrived; it now stops on `ServerClosed`, posted behind it. `mcp:cli-legacy` answered messages read together with `notifications/initialized` as if the session hadn't started; they now go to the started server. First tests: `tests/Feature/ServerFunctionalityTest.php`.
 * **Creation**: `mcp:cli`, the 2026-07-28 stdio server. **Update**: [Package](orientation/package.md).
 
 ## 2026-11-02
