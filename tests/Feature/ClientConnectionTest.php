@@ -41,7 +41,7 @@ class ModernAskingClient extends ClientConfiguration
 
 beforeEach(function () {
     ControlPanel::setInstance($panel = new ControlPanel());
-    $mcp = require __DIR__.'/../../../core/config/mcp.php';
+    $mcp = require \Composer\InstalledVersions::getInstallPath('superconductor/core').'/config/mcp.php';
     // Three seconds, not one: a cold PHP start under load can take most of a second, which made the probe fall back.
     $mcp['clients']['initialize_timeout'] = 3;
     $panel->registerInstance('config', new Repository(['mcp' => $mcp, 'stdio' => require __DIR__.'/../../config/stdio.php']));
@@ -51,7 +51,7 @@ beforeEach(function () {
     $registry = new ResourceRegistry();
     $panel->registerInstance(Loop::class, new EventLoop($registry, new LoopWaiter($registry, new StreamSelectWaiterBackend(), 16_000_000), new GuzzlePromiseEngine()));
 
-    require __DIR__.'/../../../core/routes/mcp.php';
+    require \Composer\InstalledVersions::getInstallPath('superconductor/core').'/routes/mcp.php';
 
     $this->log = tempnam(sys_get_temp_dir(), 'stdio-client');
     $this->server = fn(string $mode) => new StdioServerDefinition(PHP_BINARY, [__DIR__.'/../Fixtures/fake-server.php', $mode, $this->log]);

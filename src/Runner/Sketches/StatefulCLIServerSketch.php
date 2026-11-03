@@ -6,7 +6,7 @@ use JsonException;
 use ReflectionException;
 use Fabricate\Server\ServerRegistry;
 use Fabricate\Server\ServerConfiguration;
-use App\Runner\Sketches\Sketch as BaseSketch;
+use Voyager\Sketches\Sketch as BaseSketch;
 use Voyager\Contracts\Sketches\SketchLoopResult;
 use Voyager\Contracts\IOPools\Loop as LoopInterface;
 use Voyager\Contracts\Sketches\Attributes\Sketch as SketchDef;

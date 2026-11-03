@@ -2,6 +2,8 @@
 
 ## 2026-11-03
 
+* **Release prep**: [Package](orientation/package.md): the manifest requires the Voyager components the package imports (`contracts`, `nuts-and-bolts`, `signals`), adds `branch-alias` 0.11.x-dev, `homepage` and `support`. Both sketches extend `Voyager\Sketches\Sketch` instead of the app skeleton's `App\Runner\Sketches\Sketch`. Tests read core's config and routes through `Composer\InstalledVersions` instead of a sibling checkout. `tests.yml` on 8.4/8.5 NTS/ZTS; README written.
+
 * **Fix**: [Connecting a client over stdio](transport/client.md): a 2026-07-28 server that kept exiting was relaunched without end; a relaunch that exits before saying anything now fails the connection. A command that cannot start sets `failure()` instead of throwing, from `open()` and from a relaunch alike.
 * **Update**: [Connecting a client over stdio](transport/client.md): `StdioClientConnection` is the whole connection, handshake and session, implementing core's `ClientConnection` contract directly; nothing of it is in core. **Fix**: messages the server sent before answering the handshake were dropped; they now reach the client. A legacy server exiting fires `ConnectionFailed` and answers requests in flight with the reason; a relaunched 2026-07-28 server's lost requests are answered too.
 * **Creation**: [Connecting a client over stdio](transport/client.md): `StdioServerDefinition`, `StdioClientConnection` and `StdioClientPipe`: server/discover probe with fallback to initialize, the handshake before `MCPClient` exists, async mail through `deliver()`, close/SIGTERM/SIGKILL shutdown, and relaunching a 2026-07-28 server that exits. Tests: `tests/Feature/ClientConnectionTest.php` against `tests/Fixtures/fake-server.php`.

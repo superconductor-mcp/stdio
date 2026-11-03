@@ -80,7 +80,7 @@ final class StatefulHarness extends PipeHarness
 
 beforeEach(function () {
     ControlPanel::setInstance($panel = new ControlPanel());
-    $panel->registerInstance('config', new Repository(['mcp' => require __DIR__.'/../../../core/config/mcp.php']));
+    $panel->registerInstance('config', new Repository(['mcp' => require \Composer\InstalledVersions::getInstallPath('superconductor/core').'/config/mcp.php']));
     $panel->registerSingleton(ProcedureRouter::class);
     $panel->registerInstance('signals', new SignalDispatcher($panel));
     $panel->registerInstance(ToolRegistry::class, $tools = new ToolRegistry($panel));
@@ -91,7 +91,7 @@ beforeEach(function () {
     $loop->method('post')->willReturnCallback(fn(object $mail) => $this->posted->append($mail));
     $panel->registerInstance(Loop::class, $loop);
 
-    require __DIR__.'/../../../core/routes/mcp.php';
+    require \Composer\InstalledVersions::getInstallPath('superconductor/core').'/routes/mcp.php';
 
     $this->sent = new ArrayObject();
     $this->pipe = $this->createMock(StdioServerPipe::class);

@@ -14,7 +14,7 @@ sources:
 
 # Overview
 
-The stdio transport for Superconductor MCP, version 0.11.0, requiring `superconductor/core`, `venusian-voyager/io-pools` and `venusian-voyager/sketches`.[^manifest]
+The stdio transport for Superconductor MCP, version 0.11.0, requiring `superconductor/core` and the `venusian-voyager` `contracts`, `io-pools`, `nuts-and-bolts`, `signals` and `sketches` components.[^manifest] Its sketches extend `Voyager\Sketches\Sketch`. Tests run with `vendor/bin/pest` from the package root, reading core's config and routes from where Composer installed it; CI runs them on PHP 8.4 and 8.5, NTS and ZTS. User documentation: https://venusian.projectsaturnstudios.com/docs/superconductor/stdio.
 
 # State
 

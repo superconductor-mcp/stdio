@@ -2,7 +2,7 @@
 
 namespace SuperconductorMCP\STDIO\Runner\Sketches;
 
-use App\Runner\Sketches\Sketch as BaseSketch;
+use Voyager\Sketches\Sketch as BaseSketch;
 use Fabricate\Server\ServerConfiguration;
 use Fabricate\Server\ServerRegistry;
 use ReflectionException;
