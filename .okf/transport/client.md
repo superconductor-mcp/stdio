@@ -51,7 +51,7 @@ Lines read after the handshake go to `MCPClient::receiveMessage()`. Its replies,
 
 # Shutdown and restarts
 
-`close()` closes the server's stdin and gives it two seconds to exit, then sends SIGTERM and waits again, then SIGKILL, as the transport asks.[^connection][^stdio-spec][^tests] A 2026-07-28 server that exits on its own is launched again, keeping the same client; the requests it was answering are answered with an error saying so, since the new process never saw them. Any other server exiting fails the connection: its client is gone, every request in flight gets the reason as its error, `failure()` says it, and `ConnectionFailed` fires.[^connection][^stdio-spec][^tests]
+`close()` closes the server's stdin and gives it two seconds to exit, then sends SIGTERM and waits again, then SIGKILL, as the transport asks.[^connection][^stdio-spec][^tests] A 2026-07-28 server that exits on its own is launched again, as the transport asks ("the client SHOULD restart it"), keeping the same client; the requests it was answering are answered with an error saying so, since the new process never saw them. A relaunched server that exits before a line is read from it, or that cannot be started, is not launched a third time: the spec bounds nothing here, so the line is drawn at a process that never spoke. That, a command that cannot start, and any other server exiting fail the connection: its client is gone, every request in flight gets the reason as its error, `failure()` says it, and `ConnectionFailed` fires.[^connection][^stdio-spec][^tests]
 
 [^connection]: StdioClientConnection
 [^pipe]: StdioClientPipe

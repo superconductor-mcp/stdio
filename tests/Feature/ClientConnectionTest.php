@@ -42,7 +42,8 @@ class ModernAskingClient extends ClientConfiguration
 beforeEach(function () {
     ControlPanel::setInstance($panel = new ControlPanel());
     $mcp = require __DIR__.'/../../../core/config/mcp.php';
-    $mcp['clients']['initialize_timeout'] = 1;
+    // Three seconds, not one: a cold PHP start under load can take most of a second, which made the probe fall back.
+    $mcp['clients']['initialize_timeout'] = 3;
     $panel->registerInstance('config', new Repository(['mcp' => $mcp, 'stdio' => require __DIR__.'/../../config/stdio.php']));
     $panel->registerSingleton(ProcedureRouter::class);
     $panel->registerInstance('signals', new SignalDispatcher($panel));
@@ -59,6 +60,7 @@ beforeEach(function () {
 
 afterEach(function () {
     @unlink($this->log);
+    if(file_exists("{$this->log}.launches")) unlink("{$this->log}.launches");
     ControlPanel::setInstance(null);
 });
 
@@ -219,4 +221,38 @@ it('answers what a 2026-07-28 server left in flight when it exited, and keeps th
     expect($connection->failure())->toBeNull();
 
     $connection->close();
+});
+
+it('stops relaunching a 2026-07-28 server that exits before it is heard from again, and fails the connection.', function () {
+    $failed = null;
+    app('signals')->listen(ConnectionFailed::class, function(ConnectionFailed $signal) use (&$failed) { $failed = $signal; });
+
+    $connection = ($this->server)('dying')->connect(new AskingClient(new ClientCapabilitiesFactory()));
+    $client = $connection->client();
+
+    $lost = listToolsOverStdio($client);
+
+    $deadline = false;
+    app(Loop::class)->at(3, function() use (&$deadline) { $deadline = true; });
+    app(Loop::class)->until(function() use (&$failed, &$deadline) { return ! is_null($failed) || $deadline; });
+
+    expect($failed)->toBeInstanceOf(ConnectionFailed::class);
+
+    // Time for any further relaunch to show up in the count.
+    $waited = false;
+    app(Loop::class)->at(0.5, function() use (&$waited) { $waited = true; });
+    app(Loop::class)->until(function() use (&$waited) { return $waited; });
+
+    expect($lost)->toBeInstanceOf(MCPError::class)
+        ->and((int) file_get_contents("{$this->log}.launches"))->toBe(2)
+        ->and($failed->session_id)->toBe($client->session_id)
+        ->and($connection->failure())->toBe($failed->reason)
+        ->and($connection->client())->toBeNull();
+});
+
+it('fails the connection, without throwing, when the server command cannot start.', function () {
+    $connection = new StdioServerDefinition('/nonexistent/mcp-server')->connect(new AskingClient(new ClientCapabilitiesFactory()));
+
+    expect($connection->client())->toBeNull()
+        ->and($connection->failure())->toContain('/nonexistent/mcp-server');
 });

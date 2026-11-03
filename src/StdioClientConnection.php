@@ -30,7 +30,6 @@ use Fabricate\Schema\V20250618;
 use Fabricate\Schema\V20251125;
 use Fabricate\Schema\V20260728;
 use Fabricate\Schema\V20260728\Concerns\MCPErrorCode;
-use RuntimeException;
 use SuperconductorMCP\STDIO\Pipes\StdioClientPipe;
 use Voyager\Contracts\IOPools\Loop;
 use Voyager\NutsAndBolts\Str;
@@ -50,7 +49,8 @@ use Voyager\NutsAndBolts\Str;
  * A legacy server that exits ends the session: every request in flight gets the reason as its error, ConnectionFailed
  * fires, and failure() says why. A 2026-07-28 server that exits unexpectedly is launched again, as the stdio transport
  * asks, keeping the client; the requests it was answering are answered with an error saying so, since the new process
- * never saw them.
+ * never saw them. A relaunched server that exits before this connection reads a line from it, or that cannot be
+ * started, cannot be talked to either, so the session ends the same way instead of launching it again.
  */
 final class StdioClientConnection implements ClientConnection
 {
@@ -63,6 +63,12 @@ final class StdioClientConnection implements ClientConnection
     private ?StdioClientPipe $pipe = null;
 
     private readonly string $watcher;
+
+    /** Whether the running process was launched after an earlier one exited. */
+    private bool $relaunched = false;
+
+    /** Whether a line has been read from the running process. */
+    private bool $heard = false;
 
     private ?MCPClient $client = null;
 
@@ -95,7 +101,7 @@ final class StdioClientConnection implements ClientConnection
 
     public function open(): void
     {
-        $this->launch();
+        if(! $this->launch()) return;
 
         if($version = $this->negotiate()) $this->start($version);
         else $this->close();
@@ -136,29 +142,47 @@ final class StdioClientConnection implements ClientConnection
         $this->stop();
     }
 
-    private function launch(): void
+    /**
+     * Starts the server process, or says why it could not in failure().
+     */
+    private function launch(): bool
     {
-        $process = proc_open(
-            [$this->command, ...$this->args],
-            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
-            $pipes,
-            null,
-            $this->env === [] ? null : [...getenv(), ...$this->env],
-        );
+        // A command that cannot start is a failure of this connection, not a warning for the process.
+        set_error_handler(fn() => true);
 
-        if(! is_resource($process)) throw new RuntimeException("Could not start [{$this->command}].");
+        try {
+            $process = proc_open(
+                [$this->command, ...$this->args],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $pipes,
+                null,
+                $this->env === [] ? null : [...getenv(), ...$this->env],
+            );
+        } finally {
+            restore_error_handler();
+        }
 
-        $this->process = $process;
-        $this->failure = null;
+        if(! is_resource($process))
+        {
+            $this->failure = "Could not start [{$this->command}].";
+            return false;
+        }
+
+        [$this->process, $this->failure, $this->heard] = [$process, null, false];
 
         $this->pipe = new StdioClientPipe(
             ...$pipes,
-            on_line: fn(string $line) => $this->received(MessageDecoder::fromWire($line)),
+            on_line: function(string $line) {
+                $this->heard = true;
+                $this->received(MessageDecoder::fromWire($line));
+            },
             on_end: $this->ended(...),
             before_wait: $this->sendQueued(...),
         );
 
         app(Loop::class)->resource($this->watcher, $this->pipe);
+
+        return true;
     }
 
     /**
@@ -415,8 +439,8 @@ final class StdioClientConnection implements ClientConnection
     }
 
     /**
-     * The server can no longer be talked to. A 2026-07-28 session launches it again; any other session is over: the
-     * client is gone, every request it had in flight gets the reason as its error, and ConnectionFailed fires.
+     * The server can no longer be talked to. A 2026-07-28 session launches it again, unless the process that exited
+     * was itself a relaunch nothing was read from; any other session is over.
      */
     private function ended(string $reason): void
     {
@@ -426,24 +450,35 @@ final class StdioClientConnection implements ClientConnection
 
         if(is_null($client = $this->client)) return;
 
-        if($client->active_protocol_version !== ProtocolVersion::V20260728->value)
+        if($client->active_protocol_version !== ProtocolVersion::V20260728->value || ($this->relaunched && ! $this->heard))
         {
-            $this->client = null;
-            $client->close($reason);
-
-            signal(new ConnectionFailed($client->session_id, $reason));
+            $this->lost($client, $this->relaunched && ! $this->heard ? "{$reason} It was launched again and exited before saying anything, so it is not launched a third time." : $reason);
             return;
         }
 
         $client->failPending("{$reason} The server was launched again, and never saw the request.");
 
         // not from inside the pipe's own wake: the loop is still walking it
-        app(Loop::class)->at(0, function() {
+        app(Loop::class)->at(0, function() use ($client) {
             if($this->closing) return;
 
             $this->stop();
-            $this->launch();
+            $this->relaunched = true;
+
+            if(! $this->launch()) $this->lost($client, $this->failure);
         });
+    }
+
+    /**
+     * The session is over: the client is gone, every request it had in flight gets the reason as its error,
+     * failure() keeps it, and the application hears ConnectionFailed.
+     */
+    private function lost(MCPClient $client, string $reason): void
+    {
+        [$this->client, $this->failure] = [null, $reason];
+        $client->close($reason);
+
+        signal(new ConnectionFailed($client->session_id, $reason));
     }
 
     /**
