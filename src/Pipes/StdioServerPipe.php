@@ -2,21 +2,24 @@
 
 namespace SuperconductorMCP\STDIO\Pipes;
 
-use Fabricate\NutsAndBolts\LineDecoder;
-use SuperconductorMCP\STDIO\Events\InboundLine;
-use SuperconductorMCP\STDIO\Events\PipeClosed;
+use Fabricate\Mechanism\Decoding\DecodedBatch;
+use Fabricate\Mechanism\Decoding\InvalidMessage;
+use Fabricate\Mechanism\MessageDecoder;
+use JsonException;
+use ReflectionException;
 use SuperconductorMCP\STDIO\Events\BatchReceived;
-use Voyager\Contracts\IOPools\Loop;
 use Voyager\Contracts\IOPools\WakeReason;
 use Voyager\IOPools\Resources\WakeSource;
 use Voyager\IOPools\Waiter\Wakes\Readable;
 use Voyager\IOPools\Waiter\Wakes\Writable;
+use SuperconductorMCP\STDIO\Events\PipeClosed;
+use Voyager\Contracts\IOPools\Loop as LoopInterface;
 
-class StdioPipe extends WakeSource
+class StdioServerPipe extends WakeSource
 {
-    public const string NAME = 'mcp.stdio';
+    public readonly string $name;
 
-    private const int CHUNK = 65536;
+    private readonly int $read_chunk_size;
 
     private string $inbound = '';
 
@@ -32,12 +35,16 @@ class StdioPipe extends WakeSource
     /**
      * @param resource $in
      * @param resource $out
+     * @throws ReflectionException
      */
     public function __construct(
-        private readonly mixed $in,
-        private readonly mixed $out,
-        private readonly Loop $event_loop,
+        protected readonly mixed $in,
+        protected readonly mixed $out,
+        protected readonly LoopInterface $event_loop,
     ) {
+        $this->name = config('stdio.server_pipe_name');
+        $this->read_chunk_size = config('stdio.read_chunk_size');
+
         // PHP's own read buffer can hold bytes the fd no longer reports as readable; skip it
         stream_set_read_buffer($this->in, 0);
         stream_set_write_buffer($this->out, 0);
@@ -81,7 +88,6 @@ class StdioPipe extends WakeSource
         }
     }
 
-    // the blocking flag lives on the descriptor the parent shell shares; hand it back as found
     public function release(): void
     {
         stream_set_blocking($this->in, true);
@@ -93,9 +99,13 @@ class StdioPipe extends WakeSource
         }
     }
 
+    /**
+     * @throws ReflectionException
+     * @throws JsonException
+     */
     private function read(): void
     {
-        while (($chunk = fread($this->in, self::CHUNK)) !== false && $chunk !== '') {
+        while (($chunk = fread($this->in, $this->read_chunk_size)) !== false && $chunk !== '') {
             $this->inbound .= $chunk;
         }
 
@@ -104,13 +114,19 @@ class StdioPipe extends WakeSource
             $this->inbound = substr($this->inbound, $at + 1);
 
             if ($line !== '') {
-                // a batch stays together so the node can refuse it whole when the session's version has no batches
-                $messages = LineDecoder::decode($line);
-                $this->event_loop->post(LineDecoder::isBatch($line) ? new BatchReceived($messages) : $messages[0]);
+                $messages = MessageDecoder::fromWire($line);
+
+                if($messages instanceof InvalidMessage)
+                {
+                    $this->send($messages->toJson());
+                }
+                else
+                {
+                    $this->event_loop->post($messages instanceof DecodedBatch ? new BatchReceived($messages) : $messages);
+                }
             }
         }
 
-        // an empty read means "nothing yet" or "client gone"; only EOF says which
         if (feof($this->in)) {
             $this->input_closed = true;
             $this->close();
@@ -136,7 +152,6 @@ class StdioPipe extends WakeSource
         $this->outbound = substr($this->outbound, $written);
     }
 
-    // the session ends when either direction does; the sketch hears it once
     private function close(): void
     {
         if ($this->announced_close) {

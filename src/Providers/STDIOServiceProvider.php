@@ -2,14 +2,8 @@
 
 namespace SuperconductorMCP\STDIO\Providers;
 
-use Fabricate\Client\MCPClient;
-use Fabricate\Client\ClientManager;
-use Fabricate\Contracts\Client\MCPClient as ClientContract;
-use Voyager\Contracts\IOPools\Loop;
-use Voyager\Contracts\Core\FrameworkCore;
-use SuperconductorMCP\STDIO\Client\StdioConnection;
-use SuperconductorMCP\STDIO\Runner\Sketches\STDIOServerSketch;
 use Voyager\NutsAndBolts\ServiceProvider;
+use SuperconductorMCP\STDIO\Runner\Sketches\StatefulCLIServerSketch;
 
 class STDIOServiceProvider extends ServiceProvider
 {
@@ -17,22 +11,11 @@ class STDIOServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../../config/stdio.php', 'stdio');
 
-        // Rocket only discovers sketches under the app's own paths; a package's sketch joins through sketches.load.
-        $this->app['config']->push('sketches.load', STDIOServerSketch::class);
+        $this->app['config']->push('sketches.load', StatefulCLIServerSketch::class);
     }
 
     public function boot(): void
     {
-        $this->publishes([
-            __DIR__.'/../../config/stdio.php' => config_path('stdio.php'),
-        ], 'stdio-config');
 
-        // an mcp_servers entry of type stdio becomes a client whose connection is the server's own pipes
-        $this->app->make(ClientManager::class)->extend('stdio', function (FrameworkCore $app, array $config): ClientContract {
-            $loop = $app->make(Loop::class);
-            $client = new MCPClient($config['name'], $loop);
-
-            return $client->attach(new StdioConnection($config, $loop, $client));
-        });
     }
 }
