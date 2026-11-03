@@ -1,5 +1,9 @@
 # Update Log
 
+## 2026-11-03
+
+* **Creation**: `mcp:cli`, the 2026-07-28 stdio server. **Update**: [Package](orientation/package.md).
+
 ## 2026-11-02
 
 * **Update**: batches: a started 2025-03-26 session answers a batch's requests as one batch; other versions, and anything before the session starts, are refused with -32600.

@@ -1,3 +1,3 @@
 # Orientation
 
-* [Package](package.md) - What superconductor/stdio holds today: a manifest and no code yet.
+* [Package](package.md) - The stdio transport - mcp:cli-legacy for the stateful versions, mcp:cli for 2026-07-28.
