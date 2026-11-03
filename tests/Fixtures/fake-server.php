@@ -27,14 +27,16 @@ while(true)
     [$id, $method] = [$message['id'] ?? null, $message['method'] ?? null];
 
     match(true) {
-        $method === 'server/discover' && in_array($mode, ['modern', 'crash', 'stubborn'], true) => $send(['jsonrpc' => '2.0', 'id' => $id, 'result' => $discovered]),
+        $method === 'server/discover' && in_array($mode, ['modern', 'crash', 'stubborn', 'vanish'], true) => $send(['jsonrpc' => '2.0', 'id' => $id, 'result' => $discovered]),
         $method === 'server/discover' && $mode === 'refuse' => $send(['jsonrpc' => '2.0', 'id' => $id, 'error' => ['code' => -32022, 'message' => 'Unsupported protocol version', 'data' => ['supported' => ['2099-01-01'], 'requested' => '2026-07-28']]]),
-        $method === 'server/discover' && in_array($mode, ['legacy', 'newer'], true) => $send(['jsonrpc' => '2.0', 'id' => $id, 'error' => ['code' => -32601, 'message' => 'Method not found']]),
+        $method === 'server/discover' && in_array($mode, ['legacy', 'newer', 'quit'], true) => $send(['jsonrpc' => '2.0', 'id' => $id, 'error' => ['code' => -32601, 'message' => 'Method not found']]),
         $method === 'server/discover' => null, // silent
         $method === 'initialize' => [
             $mode === 'legacy' || $mode === 'silent' ? $send(['jsonrpc' => '2.0', 'method' => 'ping', 'id' => 'early']) : null,
+            $mode === 'legacy' ? $send(['jsonrpc' => '2.0', 'method' => 'notifications/message', 'params' => ['level' => 'info', 'data' => 'starting']]) : null,
             $send(['jsonrpc' => '2.0', 'id' => $id, 'result' => $initialized($mode === 'newer' ? '2099-01-01' : '2025-11-25')]),
         ],
+        $method === 'tools/list' && in_array($mode, ['quit', 'vanish'], true) => exit(1),
         $method === 'tools/list' => [
             $send(['jsonrpc' => '2.0', 'id' => $id, 'result' => ($message['params']['_meta'] ?? false) ? ['_meta' => [], 'resultType' => 'complete', 'ttlMs' => 0, 'cacheScope' => 'private', 'tools' => []] : ['tools' => []]]),
             $mode === 'crash' ? exit(1) : null,

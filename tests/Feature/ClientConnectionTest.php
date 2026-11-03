@@ -2,6 +2,9 @@
 
 use Fabricate\Client\ClientCapabilitiesFactory;
 use Fabricate\Client\ClientConfiguration;
+use Fabricate\Client\Signals\ConnectionFailed;
+use Fabricate\Client\Signals\NotificationReceived;
+use Fabricate\Contracts\Schema\Messaging\MCPError;
 use Fabricate\Contracts\Mechanism\Attributes\ClientConfig;
 use Fabricate\Contracts\Schema\RequestId;
 use Fabricate\Core\Routing\ProcedureRouter;
@@ -165,6 +168,55 @@ it('launches a 2026-07-28 server again when it exits, and keeps the client.', fu
     expect($connection->failure())->toBeNull()
         ->and($connection->client())->toBe($client)
         ->and(listToolsOverStdio($client))->toBeInstanceOf(V20260728\Messaging\Tools\ListToolsResult::class);
+
+    $connection->close();
+});
+
+it('hears what the server sends before it answers initialize, once the client exists.', function () {
+    $heard = [];
+    app('signals')->listen(NotificationReceived::class, function(NotificationReceived $signal) use (&$heard) { $heard[] = $signal->notification->method; });
+
+    $connection = ($this->server)('legacy')->connect(new AskingClient(new ClientCapabilitiesFactory()));
+    $connection->close();
+
+    expect($heard)->toBe(['notifications/message']);
+});
+
+it('fails the connection when a legacy server exits mid-session: the application hears it, and requests in flight get the error.', function () {
+    $failed = null;
+    app('signals')->listen(ConnectionFailed::class, function(ConnectionFailed $signal) use (&$failed) { $failed = $signal; });
+
+    $connection = ($this->server)('quit')->connect(new AskingClient(new ClientCapabilitiesFactory()));
+    $client = $connection->client();
+    $answer = null;
+
+    $client->request(new V20251125\Messaging\Tools\ListToolsRequest(new RequestId('tools')), new RequestId('tools'), function($response) use (&$answer) { $answer = $response; });
+    app(Loop::class)->until(function() use (&$answer) { return $answer !== null; });
+
+    expect($answer)->toBeInstanceOf(MCPError::class)
+        ->and($failed)->toBeInstanceOf(ConnectionFailed::class)
+        ->and($failed->session_id)->toBe($client->session_id)
+        ->and($answer->toArray()['message'])->toBe($failed->reason)
+        ->and($connection->failure())->toBe($failed->reason)
+        ->and($connection->client())->toBeNull();
+});
+
+it('answers what a 2026-07-28 server left in flight when it exited, and keeps the client for the relaunched one.', function () {
+    $connection = ($this->server)('vanish')->connect(new AskingClient(new ClientCapabilitiesFactory()));
+    $client = $connection->client();
+
+    $lost = listToolsOverStdio($client);
+
+    expect($lost)->toBeInstanceOf(MCPError::class)
+        ->and($lost->toArray()['message'])->toContain('launched again')
+        ->and($connection->client())->toBe($client);
+
+    // The relaunch clears failure() within the same turns.
+    $waited = false;
+    app(Loop::class)->at(0.5, function() use (&$waited) { $waited = true; });
+    app(Loop::class)->until(function() use (&$waited) { return $waited; });
+
+    expect($connection->failure())->toBeNull();
 
     $connection->close();
 });

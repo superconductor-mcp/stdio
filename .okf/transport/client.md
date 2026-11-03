@@ -33,7 +33,7 @@ A `StdioServerDefinition` holds the server's command, arguments and extra enviro
 
 # Handshake
 
-The handshake runs in the connection; `MCPClient` is built only after it, in the agreed version.[^connection]
+The handshake runs in this connection, as the stdio transport describes it, never in the entity and never in core, which holds only the `ClientConnection` contract this class implements. `MCPClient` is built only after the handshake, in the agreed version.[^connection]
 
 | Client supports | Server does | Outcome |
 |---|---|---|
@@ -43,7 +43,7 @@ The handshake runs in the connection; `MCPClient` is built only after it, in the
 | only 2026-07-28 | is legacy | fails; nothing else is sent |
 | no 2026-07-28 | — | `initialize` straight away |
 
-`initialize` carries the newest handshake version the client supports. An answer in a version the client doesn't support fails the connection without `notifications/initialized`, as the lifecycle asks. Pings the server sends before initialized are answered; nothing else is handled before the client exists.[^connection][^versioning-spec][^tests] `server` holds what the server said about itself: its `InitializeResult`, or its `DiscoverResult`. `failure()` says why a connection has no client.[^connection]
+`initialize` carries the newest handshake version the client supports. An answer in a version the client doesn't support fails the connection without `notifications/initialized`, as the lifecycle asks. Pings the server sends before initialized are answered; anything else it sends meanwhile, a logging notification say, waits and reaches the client first thing.[^connection][^versioning-spec][^tests] `server` holds what the server said about itself: its `InitializeResult`, or its `DiscoverResult`. `failure()` says why a connection has no client.[^connection]
 
 # Talking
 
@@ -51,7 +51,7 @@ Lines read after the handshake go to `MCPClient::receiveMessage()`. Its replies,
 
 # Shutdown and restarts
 
-`close()` closes the server's stdin and gives it two seconds to exit, then sends SIGTERM and waits again, then SIGKILL, as the transport asks.[^connection][^stdio-spec][^tests] A 2026-07-28 server that exits on its own is launched again, keeping the same client; requests it was answering are lost. Any other session ends, and `failure()` says why.[^connection][^stdio-spec][^tests]
+`close()` closes the server's stdin and gives it two seconds to exit, then sends SIGTERM and waits again, then SIGKILL, as the transport asks.[^connection][^stdio-spec][^tests] A 2026-07-28 server that exits on its own is launched again, keeping the same client; the requests it was answering are answered with an error saying so, since the new process never saw them. Any other server exiting fails the connection: its client is gone, every request in flight gets the reason as its error, `failure()` says it, and `ConnectionFailed` fires.[^connection][^stdio-spec][^tests]
 
 [^connection]: StdioClientConnection
 [^pipe]: StdioClientPipe

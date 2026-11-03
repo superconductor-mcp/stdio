@@ -5,8 +5,13 @@ namespace SuperconductorMCP\STDIO;
 use Closure;
 use Fabricate\Client\ClientConfiguration;
 use Fabricate\Client\MCPClient;
+use Fabricate\Client\Signals\ConnectionFailed;
 use Fabricate\Contracts\Client\ClientConnection;
+use Fabricate\Contracts\Mechanism\DecodedMessage;
+use Fabricate\Contracts\Schema\Messaging\Initialize\InitializeResult;
 use Fabricate\Contracts\Schema\Messaging\MCPError;
+use Fabricate\Contracts\Schema\Messaging\RPC\JSONRPCMessage;
+use Fabricate\Contracts\Schema\ProtocolVersion;
 use Fabricate\Contracts\Schema\RequestId;
 use Fabricate\Contracts\Schema\RPCErrorCode;
 use Fabricate\Mechanism\Decoding\DecodedBatch;
@@ -25,24 +30,29 @@ use Fabricate\Schema\V20250618;
 use Fabricate\Schema\V20251125;
 use Fabricate\Schema\V20260728;
 use Fabricate\Schema\V20260728\Concerns\MCPErrorCode;
-use Fabricate\Contracts\Schema\Messaging\Initialize\InitializeResult;
 use RuntimeException;
 use SuperconductorMCP\STDIO\Pipes\StdioClientPipe;
 use Voyager\Contracts\IOPools\Loop;
 use Voyager\NutsAndBolts\Str;
 
 /**
- * A client's connection to a server it launches as a subprocess. Opening it runs the handshake here, never in the
- * entity: a client that supports 2026-07-28 probes with server/discover first, as the stdio transport asks, and a
- * server that answers it is modern. A recognized modern error ends the attempt; any other error, or silence until
- * mcp.clients.initialize_timeout, means a legacy server, which gets initialize in the newest version the client has
- * a handshake for, then notifications/initialized. The MCPClient is built in the agreed version only after that.
+ * A client's connection to a server it launches as a subprocess, talking over its stdin and stdout. Opening it runs
+ * the handshake here, never in the entity: a client that supports 2026-07-28 probes with server/discover first, as
+ * the stdio transport asks, and a server that answers it is modern. A recognized modern error ends the attempt; any
+ * other error, or silence until mcp.clients.initialize_timeout, means a legacy server, which gets initialize in the
+ * newest version the client has a handshake for, then notifications/initialized. Pings the server sends meanwhile
+ * are answered, which the lifecycle allows before initialized; whatever else it sends waits in the inbox and reaches
+ * the client first thing. The MCPClient is built in the agreed version only after that.
  *
- * Async mail the client's work posts to the loop reaches the session through deliver(), from whoever handles the
- * loop's mail. A 2026-07-28 server that exits unexpectedly is launched again, as the stdio transport asks; the
- * requests it was answering are lost.
+ * Once the client exists, every line read goes to it, and what it queues goes back out. Async mail the client's work
+ * posts to the loop reaches the session through deliver(), from whoever handles the loop's mail.
+ *
+ * A legacy server that exits ends the session: every request in flight gets the reason as its error, ConnectionFailed
+ * fires, and failure() says why. A 2026-07-28 server that exits unexpectedly is launched again, as the stdio transport
+ * asks, keeping the client; the requests it was answering are answered with an error saying so, since the new process
+ * never saw them.
  */
-class StdioClientConnection implements ClientConnection
+final class StdioClientConnection implements ClientConnection
 {
     /** Seconds the server gets to exit after each step of shutdown, before the next. */
     private const float EXIT_GRACE = 2.0;
@@ -54,17 +64,20 @@ class StdioClientConnection implements ClientConnection
 
     private readonly string $watcher;
 
-    /** @var list<string> Lines from the server not yet handled: those read before the client exists. */
-    private array $lines = [];
-
     private ?MCPClient $client = null;
 
     private ?string $failure = null;
 
     private bool $closing = false;
 
+    /** The protocol version the server and client agreed on. */
+    public private(set) ?ProtocolVersion $version = null;
+
     /** What the server said about itself in the handshake: its InitializeResult, or on 2026-07-28 its DiscoverResult. */
     public private(set) InitializeResult|V20260728\Messaging\Discover\DiscoverResult|null $server = null;
+
+    /** @var list<DecodedMessage|DecodedBatch> What the server sent before the client existed. */
+    private array $inbox = [];
 
     /**
      * @param list<string> $args
@@ -84,17 +97,8 @@ class StdioClientConnection implements ClientConnection
     {
         $this->launch();
 
-        if($version = $this->negotiate())
-        {
-            $this->client = new MCPClient($this->configuration, $version);
-
-            // What the server sent in the same read as its handshake answer is the session's.
-            foreach(array_splice($this->lines, 0) as $line) $this->receive($line);
-        }
-        else
-        {
-            $this->close();
-        }
+        if($version = $this->negotiate()) $this->start($version);
+        else $this->close();
     }
 
     public function client(): ?MCPClient
@@ -119,8 +123,9 @@ class StdioClientConnection implements ClientConnection
     }
 
     /**
-     * Shuts the server down as the stdio transport asks: its stdin closes, then it gets EXIT_GRACE seconds to exit,
-     * then SIGTERM and the same again, then SIGKILL.
+     * Ends the connection: a request still in flight is answered with an error saying so. The server is shut down as
+     * the stdio transport asks: its stdin closes, then it gets EXIT_GRACE seconds to exit, then SIGTERM and the same
+     * again, then SIGKILL.
      */
     public function close(): void
     {
@@ -148,9 +153,7 @@ class StdioClientConnection implements ClientConnection
 
         $this->pipe = new StdioClientPipe(
             ...$pipes,
-            on_line: function(string $line) {
-                $this->client ? $this->receive($line) : $this->lines[] = $line;
-            },
+            on_line: fn(string $line) => $this->received(MessageDecoder::fromWire($line)),
             on_end: $this->ended(...),
             before_wait: $this->sendQueued(...),
         );
@@ -159,11 +162,23 @@ class StdioClientConnection implements ClientConnection
     }
 
     /**
+     * The handshake is done: the session starts in the agreed version, with the client built in it, and what the
+     * server sent meanwhile reaches it.
+     */
+    private function start(ProtocolVersion $version): void
+    {
+        $this->version = $version;
+        $this->client = new MCPClient($this->configuration, $version->value);
+
+        foreach(array_splice($this->inbox, 0) as $message) $this->receive($message);
+    }
+
+    /**
      * The version the server and client agree on, or null with the reason in failure().
      */
-    private function negotiate(): ?string
+    private function negotiate(): ?ProtocolVersion
     {
-        if(in_array('2026-07-28', $this->configuration->supportedProtocolVersions(), true))
+        if(in_array(ProtocolVersion::V20260728->value, $this->configuration->supportedProtocolVersions(), true))
         {
             $modern = $this->discover();
 
@@ -183,18 +198,19 @@ class StdioClientConnection implements ClientConnection
      * Probes with server/discover in 2026-07-28: the version when the server answers that it supports it, null when it
      * is modern without it (failure() says why) or legacy (failure() stays null).
      */
-    private function discover(): ?string
+    private function discover(): ?ProtocolVersion
     {
+        $modern = ProtocolVersion::V20260728;
         $id = new RequestId((string) Str::uuid());
-        $meta = new V20260728\Messaging\MetaObjects\RequestMetaObject('2026-07-28', $this->configuration->capabilities('2026-07-28'), $this->configuration->implementation('2026-07-28'));
+        $meta = new V20260728\Messaging\MetaObjects\RequestMetaObject($modern->value, $this->configuration->capabilities($modern->value), $this->configuration->implementation($modern->value));
 
-        $this->pipe->send(new V20260728\Messaging\Discover\DiscoverRequest($id, new V20260728\Messaging\Params\RequestParams($meta))->toJson());
+        $this->send(new V20260728\Messaging\Discover\DiscoverRequest($id, new V20260728\Messaging\Params\RequestParams($meta)));
 
-        $answer = $this->await($id, '2026-07-28');
+        $answer = $this->awaitAnswer($id, $modern);
 
         if($answer instanceof DecodedResponse)
         {
-            $result = MessageHydrator::hydrateAs($answer, '2026-07-28', 'server/discover');
+            $result = MessageHydrator::hydrateAs($answer, $modern->value, 'server/discover');
 
             if(! $result instanceof V20260728\Messaging\Discover\DiscoverResult)
             {
@@ -202,7 +218,7 @@ class StdioClientConnection implements ClientConnection
                 return null;
             }
 
-            if(! in_array('2026-07-28', $result->supportedVersions, true))
+            if(! in_array($modern->value, $result->supportedVersions, true))
             {
                 $this->failure = 'The server supports ['.implode(', ', $result->supportedVersions).'], and this client none of them.';
                 return null;
@@ -210,7 +226,7 @@ class StdioClientConnection implements ClientConnection
 
             $this->server = $result;
 
-            return '2026-07-28';
+            return $modern;
         }
 
         // A recognized modern error means a modern server: no falling back to initialize.
@@ -227,14 +243,14 @@ class StdioClientConnection implements ClientConnection
      * Sends initialize in the newest version the client has a handshake for, and notifications/initialized once the
      * server answers in one the client supports. The client disconnects otherwise, as the lifecycle asks.
      */
-    private function initialize(): ?string
+    private function initialize(): ?ProtocolVersion
     {
         $id = new RequestId((string) Str::uuid());
-        $requested = $this->configuration->handshakeProtocolVersion();
+        $requested = ProtocolVersion::from($this->configuration->handshakeProtocolVersion());
 
-        $this->pipe->send(Envelope::request($requested, $this->configuration->initializeRequest($id, $requested), $id)->toJson());
+        $this->send(Envelope::request($requested->value, $this->configuration->initializeRequest($id, $requested->value), $id));
 
-        $answer = $this->await($id, $requested);
+        $answer = $this->awaitAnswer($id, $requested);
 
         if($answer instanceof DecodedError)
         {
@@ -248,15 +264,17 @@ class StdioClientConnection implements ClientConnection
             return null;
         }
 
+        // Which version's result this is can only be read off the wire: hydration needs the version first.
         $offered = $answer->result['protocolVersion'] ?? null;
+        $version = is_string($offered) ? ProtocolVersion::tryFrom($offered) : null;
 
-        if(! is_string($offered) || ! in_array($offered, $this->configuration->handshakeProtocolVersions(), true))
+        if(is_null($version) || ! in_array($version->value, $this->configuration->handshakeProtocolVersions(), true))
         {
             $this->failure = 'The server answered initialize in protocol version ['.(is_string($offered) ? $offered : 'none').'], which this client does not support.';
             return null;
         }
 
-        $result = MessageHydrator::hydrateAs($answer, $offered, 'initialize');
+        $result = MessageHydrator::hydrateAs($answer, $version->value, 'initialize');
 
         if($result instanceof MCPError)
         {
@@ -266,73 +284,72 @@ class StdioClientConnection implements ClientConnection
 
         $this->server = $result;
 
-        $initialized = match($offered) {
-            '2024-11-05' => new V20241105\Messaging\Initialize\InitializedNotification(),
-            '2025-03-26' => new V20250326\Messaging\Initialize\InitializedNotification(),
-            '2025-06-18' => new V20250618\Messaging\Initialize\InitializedNotification(),
-            '2025-11-25' => new V20251125\Messaging\Initialize\InitializedNotification(),
-        };
+        $this->send(Envelope::notification($version->value, match($version) {
+            ProtocolVersion::V20241105 => new V20241105\Messaging\Initialize\InitializedNotification(),
+            ProtocolVersion::V20250326 => new V20250326\Messaging\Initialize\InitializedNotification(),
+            ProtocolVersion::V20250618 => new V20250618\Messaging\Initialize\InitializedNotification(),
+            ProtocolVersion::V20251125 => new V20251125\Messaging\Initialize\InitializedNotification(),
+        }));
 
-        $this->pipe->send(Envelope::notification($offered, $initialized)->toJson());
-
-        return $offered;
+        return $version;
     }
 
     /**
-     * Waits for the response to a handshake request, until mcp.clients.initialize_timeout or the server ends. Pings
-     * the server sends meanwhile are answered, which the lifecycle allows before initialized; nothing else is the
-     * handshake's, and is dropped.
+     * Waits for the response to a handshake request, until it comes, the server ends, or
+     * mcp.clients.initialize_timeout. Pings the server sends meanwhile are answered; everything else stays in the
+     * inbox for the client.
      */
-    private function await(RequestId $id, string $protocol_version): DecodedResponse|DecodedError|null
+    private function awaitAnswer(RequestId $id, ProtocolVersion $version): DecodedResponse|DecodedError|null
     {
-        $loop = app(Loop::class);
-        $expired = false;
         $answer = null;
 
-        // a quiet loop never re-checks the condition, so the timer is what wakes it
-        $deadline = $loop->at((float) config('mcp.clients.initialize_timeout'), function() use (&$expired) {
-            $expired = true;
-        });
-
-        try {
-            $loop->until(function() use ($id, $protocol_version, &$expired, &$answer) {
-                while(! is_null($line = array_shift($this->lines)))
+        $this->wait(function() use ($id, $version, &$answer) {
+            foreach($this->inbox as $index => $message)
+            {
+                if(($message instanceof DecodedResponse || $message instanceof DecodedError) && $message->id()?->id === $id->id)
                 {
-                    $message = MessageDecoder::fromWire($line);
-
-                    if(($message instanceof DecodedResponse || $message instanceof DecodedError) && $message->id()?->id === $id->id)
-                    {
-                        $answer = $message;
-                        return true;
-                    }
-
-                    if($message instanceof DecodedRequest && $message->method === 'ping' && $protocol_version !== '2026-07-28')
-                    {
-                        $this->pipe->send(Envelope::response($protocol_version, $message->id(), new EmptyResult())->toJson());
-                    }
+                    $answer = $message;
+                    unset($this->inbox[$index]);
+                    break;
                 }
 
-                return $expired || ! is_null($this->failure);
-            });
-        } finally {
-            $deadline->cancel();
-        }
+                if($message instanceof DecodedRequest && $message->method === 'ping')
+                {
+                    $this->send(Envelope::response($version->value, $message->id(), new EmptyResult()));
+                    unset($this->inbox[$index]);
+                }
+            }
+
+            $this->inbox = array_values($this->inbox);
+
+            return ! is_null($answer) || ! is_null($this->failure);
+        }, (float) config('mcp.clients.initialize_timeout'));
 
         return $answer;
     }
 
-    /**
-     * One line from the server, once the client exists: its message goes to the client, and an answer goes back.
-     */
-    private function receive(string $line): void
+    private function send(JSONRPCMessage $message): void
     {
-        $message = MessageDecoder::fromWire($line);
-        $version = $this->client->active_protocol_version;
+        $this->pipe->send($message->toJson());
+    }
 
+    /**
+     * One line from the server: the client's once it exists, otherwise kept until it does.
+     */
+    private function received(DecodedMessage|DecodedBatch $message): void
+    {
+        $this->client ? $this->receive($message) : $this->inbox[] = $message;
+    }
+
+    /**
+     * One message from the server, once the client exists: it goes to the client, and an answer goes back. On
+     * 2026-07-28 a stdio client must not write responses, so a line that could not be read gets none.
+     */
+    private function receive(DecodedMessage|DecodedBatch $message): void
+    {
         if($message instanceof InvalidMessage)
         {
-            // On 2026-07-28 a stdio client must not write responses.
-            if($version !== '2026-07-28') $this->pipe->send($message->toJson());
+            if($this->version !== ProtocolVersion::V20260728) $this->send($this->refusal($message));
         }
         elseif($message instanceof DecodedBatch)
         {
@@ -351,11 +368,9 @@ class StdioClientConnection implements ClientConnection
      */
     private function receiveBatch(DecodedBatch $batch): void
     {
-        $version = $this->client->active_protocol_version;
-
-        if($version !== '2025-03-26')
+        if($this->version !== ProtocolVersion::V20250326)
         {
-            if($version !== '2026-07-28') $this->pipe->send(new InvalidMessage(null, RPCErrorCode::INVALID_REQUEST, "Batches are not part of {$version}.")->toJson());
+            if($this->version !== ProtocolVersion::V20260728) $this->send($this->refusal(new InvalidMessage(null, RPCErrorCode::INVALID_REQUEST, "Batches are not part of {$this->version->value}.")));
             return;
         }
 
@@ -364,7 +379,7 @@ class StdioClientConnection implements ClientConnection
         foreach($batch->messages as $message)
         {
             $answer = $message instanceof InvalidMessage
-                ? new V20250326\Messaging\RPC\JSONRPCError('2.0', $message->id(), $message->code->value, $message->message)
+                ? $this->refusal($message)
                 : $this->client->receiveMessage($message);
 
             if($answer) $answers[] = $answer;
@@ -373,7 +388,22 @@ class StdioClientConnection implements ClientConnection
         if($answers === []) return;
 
         $this->sendQueued();
-        $this->pipe->send(new V20250326\Messaging\RPC\JSONRPCBatchResponse($answers)->toJson());
+        $this->send(new V20250326\Messaging\RPC\JSONRPCBatchResponse($answers));
+    }
+
+    /**
+     * The session version's JSON-RPC error answering a line that could not be read, under its id when it had one.
+     */
+    private function refusal(InvalidMessage $message): JSONRPCMessage
+    {
+        [$id, $code, $reason] = [$message->id(), $message->code->value, $message->message];
+
+        return match($this->version) {
+            ProtocolVersion::V20241105 => new V20241105\Messaging\RPC\JSONRPCError('2.0', $id, $code, $reason),
+            ProtocolVersion::V20250326 => new V20250326\Messaging\RPC\JSONRPCError('2.0', $id, $code, $reason),
+            ProtocolVersion::V20250618 => new V20250618\Messaging\RPC\JSONRPCError('2.0', $id, $code, $reason),
+            ProtocolVersion::V20251125 => new V20251125\Messaging\RPC\JSONRPCErrorResponse('2.0', $id, new V20251125\Messaging\MCPError($code, $reason)),
+        };
     }
 
     /**
@@ -381,11 +411,12 @@ class StdioClientConnection implements ClientConnection
      */
     private function sendQueued(): void
     {
-        foreach($this->client?->pullQueued() ?? [] as $message) $this->pipe->send($message->toJson());
+        foreach($this->client?->pullQueued() ?? [] as $message) $this->send($message);
     }
 
     /**
-     * The server can no longer be talked to. A 2026-07-28 session launches it again; any other session is over.
+     * The server can no longer be talked to. A 2026-07-28 session launches it again; any other session is over: the
+     * client is gone, every request it had in flight gets the reason as its error, and ConnectionFailed fires.
      */
     private function ended(string $reason): void
     {
@@ -393,21 +424,26 @@ class StdioClientConnection implements ClientConnection
 
         $this->failure = $reason;
 
-        if($this->client?->active_protocol_version === '2026-07-28')
+        if(is_null($client = $this->client)) return;
+
+        if($client->active_protocol_version !== ProtocolVersion::V20260728->value)
         {
-            // not from inside the pipe's own wake: the loop is still walking it
-            app(Loop::class)->at(0, function() {
-                if($this->closing) return;
+            $this->client = null;
+            $client->close($reason);
 
-                $this->stop();
-                $this->launch();
-            });
-
+            signal(new ConnectionFailed($client->session_id, $reason));
             return;
         }
 
-        $this->client?->close();
-        $this->client = null;
+        $client->failPending("{$reason} The server was launched again, and never saw the request.");
+
+        // not from inside the pipe's own wake: the loop is still walking it
+        app(Loop::class)->at(0, function() {
+            if($this->closing) return;
+
+            $this->stop();
+            $this->launch();
+        });
     }
 
     /**
@@ -432,7 +468,7 @@ class StdioClientConnection implements ClientConnection
 
         proc_close($this->process);
 
-        [$this->process, $this->pipe, $this->lines] = [null, null, []];
+        [$this->process, $this->pipe, $this->inbox] = [null, null, []];
     }
 
     private function running(): bool
@@ -445,19 +481,32 @@ class StdioClientConnection implements ClientConnection
      */
     private function waitFor(Closure $done): void
     {
+        $look = app(Loop::class)->every(0.02, fn() => null, $this->watcher.'.exit');
+
+        try {
+            $this->wait($done, self::EXIT_GRACE);
+        } finally {
+            $look->cancel();
+        }
+    }
+
+    /**
+     * Runs the loop until $done, or $seconds.
+     */
+    private function wait(Closure $done, float $seconds): void
+    {
         $loop = app(Loop::class);
         $expired = false;
 
-        $deadline = $loop->at(self::EXIT_GRACE, function() use (&$expired) {
+        // a quiet loop never re-checks the condition, so the timer is what wakes it
+        $deadline = $loop->at($seconds, function() use (&$expired) {
             $expired = true;
         });
-        $look = $loop->every(0.02, fn() => null, $this->watcher.'.exit');
 
         try {
             $loop->until(function() use (&$expired, $done) { return $expired || $done(); });
         } finally {
             $deadline->cancel();
-            $look->cancel();
         }
     }
 }

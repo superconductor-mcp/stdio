@@ -2,6 +2,7 @@
 
 ## 2026-11-03
 
+* **Update**: [Connecting a client over stdio](transport/client.md): `StdioClientConnection` is the whole connection, handshake and session, implementing core's `ClientConnection` contract directly; nothing of it is in core. **Fix**: messages the server sent before answering the handshake were dropped; they now reach the client. A legacy server exiting fires `ConnectionFailed` and answers requests in flight with the reason; a relaunched 2026-07-28 server's lost requests are answered too.
 * **Creation**: [Connecting a client over stdio](transport/client.md): `StdioServerDefinition`, `StdioClientConnection` and `StdioClientPipe`: server/discover probe with fallback to initialize, the handshake before `MCPClient` exists, async mail through `deliver()`, close/SIGTERM/SIGKILL shutdown, and relaunching a 2026-07-28 server that exits. Tests: `tests/Feature/ClientConnectionTest.php` against `tests/Fixtures/fake-server.php`.
 * **Fix**: [Package](orientation/package.md): `mcp:cli` lost the subscription teardown sent when stdin closed, stopping before the mail carrying it arrived; it now stops on `ServerClosed`, posted behind it. `mcp:cli-legacy` answered messages read together with `notifications/initialized` as if the session hadn't started; they now go to the started server. First tests: `tests/Feature/ServerFunctionalityTest.php`.
 * **Creation**: `mcp:cli`, the 2026-07-28 stdio server. **Update**: [Package](orientation/package.md).
