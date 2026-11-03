@@ -23,4 +23,6 @@ Two sketches, registered by `STDIOServiceProvider`:[^manifest]
 * `mcp:cli-legacy {server}` runs the stateful versions, 2024-11-05 through 2025-11-25: its own initialize handshake, then an `MCPServer` in the negotiated version; whatever arrives in the same read as `notifications/initialized` goes to the started server; batches in a started 2025-03-26 session.
 * `mcp:cli {server}` runs 2026-07-28 (`StatelessServerFunctionality`): no handshake, one `MCPServer` answering each request on its own; everything goes out on stdout oldest first, async answers arriving as `OutboundMessage` mail. Batches are refused with -32600. Closing stdin closes the server, which cancels and answers each open subscription as mail, then posts `ServerClosed`; mail arrives in order, so the process ends once those are on stdout.
 
+Clients connect to stdio servers through `StdioServerDefinition`; see [Connecting a client over stdio](/transport/client.md).
+
 [^manifest]: Package manifest

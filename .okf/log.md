@@ -2,6 +2,7 @@
 
 ## 2026-11-03
 
+* **Creation**: [Connecting a client over stdio](transport/client.md): `StdioServerDefinition`, `StdioClientConnection` and `StdioClientPipe`: server/discover probe with fallback to initialize, the handshake before `MCPClient` exists, async mail through `deliver()`, close/SIGTERM/SIGKILL shutdown, and relaunching a 2026-07-28 server that exits. Tests: `tests/Feature/ClientConnectionTest.php` against `tests/Fixtures/fake-server.php`.
 * **Fix**: [Package](orientation/package.md): `mcp:cli` lost the subscription teardown sent when stdin closed, stopping before the mail carrying it arrived; it now stops on `ServerClosed`, posted behind it. `mcp:cli-legacy` answered messages read together with `notifications/initialized` as if the session hadn't started; they now go to the started server. First tests: `tests/Feature/ServerFunctionalityTest.php`.
 * **Creation**: `mcp:cli`, the 2026-07-28 stdio server. **Update**: [Package](orientation/package.md).
 
